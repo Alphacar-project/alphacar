@@ -1,3 +1,4 @@
+// frontend/app/quote/compare/page.js
 "use client";
 
 import { useState, useEffect } from "react";
@@ -124,17 +125,17 @@ function CarSelector({ title, onSearch, onReset, resetSignal }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.1fr 1.1fr", gap: "16px" }}>
-        
         {/* 제조사 */}
         <div>
-          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>제조사</div>
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+            제조사
+          </div>
           <select
             size={10}
             value={makerId}
             onChange={handleMakerChange}
             style={selectStyle}
           >
-            {/* [수정] 데이터가 있어도 맨 위에 항상 안내 문구를 남겨둠 (선택 불가 상태로) */}
             <option value="" disabled>제조사 선택</option>
             {makers.map((m) => (
               <option key={m._id} value={m._id}>{m.name}</option>
@@ -144,14 +145,15 @@ function CarSelector({ title, onSearch, onReset, resetSignal }) {
 
         {/* 모델 */}
         <div>
-          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>모델</div>
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+            모델
+          </div>
           <select
             size={10}
             value={modelId}
             onChange={handleModelChange}
             style={selectStyle}
           >
-            {/* [수정] 목록이 로드되어도 맨 위에 빈 옵션 유지 -> 첫 번째 항목 클릭 시 onChange 발생 보장 */}
             <option value="" disabled>
               {models.length === 0 ? "제조사를 선택하세요" : "모델을 선택하세요"}
             </option>
@@ -163,14 +165,15 @@ function CarSelector({ title, onSearch, onReset, resetSignal }) {
 
         {/* 트림 */}
         <div>
-          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>트림</div>
+          <div style={{ fontSize: "13px", color: "#777", marginBottom: "6px" }}>
+            트림
+          </div>
           <select
             size={10}
             value={trimId}
             onChange={handleTrimChange}
             style={selectStyle}
           >
-            {/* [수정] 여기도 동일하게 적용 */}
             <option value="" disabled>
               {trims.length === 0 ? "모델을 선택하세요" : "트림을 선택하세요"}
             </option>
@@ -182,7 +185,16 @@ function CarSelector({ title, onSearch, onReset, resetSignal }) {
       </div>
 
       {/* 선택 결과 & 버튼 */}
-      <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+      <div
+        style={{
+          marginTop: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ fontSize: "13px", color: "#555" }}>
           선택차량:&nbsp;
           <span style={{ fontWeight: 600 }}>
@@ -226,28 +238,13 @@ function CarSelector({ title, onSearch, onReset, resetSignal }) {
   );
 }
 
-// ---------------- 공통 컴포넌트: 아래 결과 카드 ----------------
-function CarResultCard({ data }) {
-  const [selectedOptions, setSelectedOptions] = useState(new Set());
-
-  useEffect(() => {
-    setSelectedOptions(new Set());
-  }, [data._id]);
-
-  const toggleOption = (id) => {
-    const newSet = new Set(selectedOptions);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedOptions(newSet);
-  };
-
+// ---------------- 공통 컴포넌트: 아래 결과 카드 (수정됨: 옵션 상태 외부 주입) ----------------
+function CarResultCard({ data, selectedOptions, onToggleOption }) {
+  // 가격 계산
   const basePrice = data.base_price || 0;
   const optionsTotal = (data.options || []).reduce((sum, opt, idx) => {
-    const id = opt._id || idx; 
-    if (selectedOptions.has(id)) {
+    const safeId = opt._id || idx;
+    if (selectedOptions.has(safeId)) {
       return sum + (opt.price || 0);
     }
     return sum;
@@ -278,12 +275,26 @@ function CarResultCard({ data }) {
           }}
         >
           {data.image_url ? (
-            <img src={data.image_url} alt={data.name} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <img
+              src={data.image_url}
+              alt={data.name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+              }}
+            />
           ) : (
-            <span style={{color: "#ccc", fontSize: "12px"}}>이미지 없음</span>
+            <span style={{ color: "#ccc", fontSize: "12px" }}>이미지 없음</span>
           )}
         </div>
-        <div style={{ fontSize: "20px", fontWeight: 800, marginBottom: "4px" }}>
+        <div
+          style={{
+            fontSize: "20px",
+            fontWeight: 800,
+            marginBottom: "4px",
+          }}
+        >
           {data.name}
         </div>
         <div style={{ fontSize: "13px", color: "#777" }}>
@@ -321,39 +332,51 @@ function CarResultCard({ data }) {
           }}
         >
           {(!data.options || data.options.length === 0) && (
-            <div style={{ padding: "12px", textAlign: "center", color: "#999", fontSize: "13px" }}>
+            <div
+              style={{
+                padding: "12px",
+                textAlign: "center",
+                color: "#999",
+                fontSize: "13px",
+              }}
+            >
               선택 가능한 옵션이 없습니다.
             </div>
           )}
-          {data.options && data.options.map((opt, idx) => {
-            const safeId = opt._id || idx; 
-            return (
-              <label
-                key={safeId}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "8px 18px",
-                  borderBottom: "1px solid #f5f5f5",
-                  cursor: "pointer",
-                  transition: "background 0.2s",
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f9f9f9"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={selectedOptions.has(safeId)}
-                  onChange={() => toggleOption(safeId)}
-                  style={{ marginRight: "12px", cursor: "pointer" }} 
-                />
-                <span style={{ flex: 1 }}>{opt.name}</span>
-                <span style={{ fontSize: "13px", color: "#555" }}>
-                  +{opt.price ? opt.price.toLocaleString() : 0}원
-                </span>
-              </label>
-            );
-          })}
+          {data.options &&
+            data.options.map((opt, idx) => {
+              const safeId = opt._id || idx;
+              return (
+                <label
+                  key={safeId}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "8px 18px",
+                    borderBottom: "1px solid #f5f5f5",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#f9f9f9")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedOptions.has(safeId)}
+                    onChange={() => onToggleOption(safeId)}
+                    style={{ marginRight: "12px", cursor: "pointer" }}
+                  />
+                  <span style={{ flex: 1 }}>{opt.name}</span>
+                  <span style={{ fontSize: "13px", color: "#555" }}>
+                    +{opt.price ? opt.price.toLocaleString() : 0}원
+                  </span>
+                </label>
+              );
+            })}
         </div>
       </div>
 
@@ -367,42 +390,13 @@ function CarResultCard({ data }) {
           alignItems: "center",
           fontSize: "15px",
           fontWeight: 700,
-          marginBottom: "18px",
+          marginBottom: "6px",
         }}
       >
         <span>최종 차량가</span>
-        <span style={{ color: "#e11d48" }}>{finalPrice.toLocaleString()}원</span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-        <button
-          type="button"
-          style={{
-            padding: "10px 18px",
-            borderRadius: "999px",
-            border: "1px solid #ddd",
-            backgroundColor: "#fff",
-            fontSize: "13px",
-            cursor: "pointer",
-          }}
-        >
-          전체 저장
-        </button>
-        <button
-          type="button"
-          style={{
-            padding: "10px 24px",
-            borderRadius: "999px",
-            border: "none",
-            backgroundColor: "#0052ff",
-            color: "#fff",
-            fontSize: "13px",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          견적 문의
-        </button>
+        <span style={{ color: "#e11d48" }}>
+          {finalPrice.toLocaleString()}원
+        </span>
       </div>
     </div>
   );
@@ -414,6 +408,28 @@ export default function CompareQuotePage() {
   const [car1Result, setCar1Result] = useState(null);
   const [car2Result, setCar2Result] = useState(null);
   const [resetAllSignal, setResetAllSignal] = useState(0);
+
+  // [추가] 옵션 선택 상태를 부모에서 관리
+  const [leftOpts, setLeftOpts] = useState(new Set());
+  const [rightOpts, setRightOpts] = useState(new Set());
+
+  // 데이터 변경 시 옵션 초기화
+  useEffect(() => setLeftOpts(new Set()), [car1Result?._id]);
+  useEffect(() => setRightOpts(new Set()), [car2Result?._id]);
+
+  const toggleLeftOpt = (id) => {
+    const newSet = new Set(leftOpts);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setLeftOpts(newSet);
+  };
+
+  const toggleRightOpt = (id) => {
+    const newSet = new Set(rightOpts);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setRightOpts(newSet);
+  };
 
   const fetchCarDetail = async (trimId) => {
     try {
@@ -443,9 +459,32 @@ export default function CompareQuotePage() {
     setResetAllSignal((prev) => prev + 1);
   };
 
+  // [핵심] 결과 보기 버튼 - 데이터를 쿼리스트링으로 넘김
+  const handleViewResult = () => {
+    if (!car1Result || !car2Result) {
+      alert("비교할 차량을 모두 조회해 주세요.");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("left", car1Result._id);
+    params.set("right", car2Result._id);
+    // 선택한 옵션 ID들을 콤마로 이어붙여서 전달
+    params.set("lopts", Array.from(leftOpts).join(","));
+    params.set("ropts", Array.from(rightOpts).join(","));
+
+    router.push(`/quote/compare/vs?${params.toString()}`);
+  };
+
   return (
     <main style={{ backgroundColor: "#f5f5f5", minHeight: "100vh" }}>
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px 40px 60px" }}>
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "24px 40px 60px",
+        }}
+      >
         <button
           type="button"
           onClick={() => router.back()}
@@ -462,6 +501,7 @@ export default function CompareQuotePage() {
           ← 뒤로 가기
         </button>
 
+        {/* 상단 타이틀 카드 */}
         <div
           style={{
             backgroundColor: "#fff",
@@ -475,13 +515,29 @@ export default function CompareQuotePage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <div style={{ width: "6px", height: "60px", borderRadius: "4px", background: "linear-gradient(180deg, #3b82f6, #1d4ed8)" }} />
+            <div
+              style={{
+                width: "6px",
+                height: "60px",
+                borderRadius: "4px",
+                background:
+                  "linear-gradient(180deg, #3b82f6, #1d4ed8)",
+              }}
+            />
             <div>
-              <div style={{ fontSize: "24px", fontWeight: 800, color: "#1d4ed8", marginBottom: "6px" }}>
+              <div
+                style={{
+                  fontSize: "24px",
+                  fontWeight: 800,
+                  color: "#1d4ed8",
+                  marginBottom: "6px",
+                }}
+              >
                 비교견적 페이지
               </div>
               <div style={{ fontSize: "15px", color: "#555" }}>
-                여기에서 두 대의 차량을 동시에 선택해서 옵션과 가격을 비교할 수 있습니다.
+                여기에서 두 대의 차량을 동시에 선택해서 옵션과 가격을
+                비교할 수 있습니다.
               </div>
             </div>
           </div>
@@ -503,7 +559,14 @@ export default function CompareQuotePage() {
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "24px" }}>
+        {/* 상단 선택 박스 2개 */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+            gap: "24px",
+          }}
+        >
           <CarSelector
             title="비교 차량 1"
             onSearch={handleSearchCar1}
@@ -518,16 +581,65 @@ export default function CompareQuotePage() {
           />
         </div>
 
+        {/* 아래 결과 영역 */}
         {(car1Result || car2Result) && (
           <div style={{ marginTop: "40px" }}>
-            <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "16px" }}>
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: 700,
+                marginBottom: "16px",
+              }}
+            >
               비교 견적 결과
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "24px" }}>
-              {car1Result && <CarResultCard data={car1Result} />}
-              {car2Result && <CarResultCard data={car2Result} />}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(380px, 1fr))",
+                gap: "24px",
+              }}
+            >
+              {car1Result && (
+                <CarResultCard 
+                  data={car1Result} 
+                  selectedOptions={leftOpts} 
+                  onToggleOption={toggleLeftOpt} 
+                />
+              )}
+              {car2Result && (
+                <CarResultCard 
+                  data={car2Result} 
+                  selectedOptions={rightOpts} 
+                  onToggleOption={toggleRightOpt} 
+                />
+              )}
             </div>
+
+            {/* 하단 결과 보기 버튼 */}
+            {car1Result && car2Result && (
+              <div style={{ marginTop: "28px" }}>
+                <button
+                  type="button"
+                  onClick={handleViewResult}
+                  style={{
+                    width: "100%",
+                    padding: "16px 0",
+                    borderRadius: "999px",
+                    border: "none",
+                    backgroundColor: "#111",
+                    color: "#fff",
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  결과 보기
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

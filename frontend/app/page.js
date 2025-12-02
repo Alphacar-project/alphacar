@@ -9,10 +9,19 @@ const bannerItems = [
   {
     id: 1,
     img: "/banners/banner1.png",
-    link: "/cashback",
+    link: "/cashback",        // 1번 배너: 기존처럼 캐시백 페이지
   },
-  { id: 2, img: "/banners/banner2.png" },
-  { id: 3, img: "/banners/banner3.png" },
+  {
+    id: 2,
+    img: "/banners/banner2.png",
+    // 2번 배너는 링크 없음 (그냥 이미지)
+  },
+  {
+    id: 3,
+    img: "/banners/banner3.png",
+    link: "/quote",           // ✅ 3번 배너: 견적 비교 선택 페이지로 이동
+    // 필요하면 "/quote/compare" 처럼 실제 라우트에 맞게 수정
+  },
 ];
 
 // TOP 10 이미지 (샘플)

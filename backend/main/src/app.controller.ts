@@ -1,27 +1,25 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AppService } from './app.service';
+import type { Response } from 'express'; // 'import type'으로 변경
 
-@Controller('main')
+@Controller('auth')
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getMainData() {
-    return {
-      welcomeMessage: 'Welcome to AlphaCar Home',
-      
-      // [추가] 검색창 관련 데이터
-      // 프론트엔드는 이 데이터가 있으면 검색창을 렌더링하게 됩니다.
-      searchBar: {
-        isShow: true,
-        placeholder: '찾는 차량을 검색해 주세요' 
-      },
+  @Get('kakao')
+  @UseGuards(AuthGuard('kakao'))
+  async kakaoLogin() {
+    return;
+  }
 
-      banners: [
-        { id: 1, text: '11월의 핫딜: 아반떼 즉시 출고', color: '#ff5555' },
-        { id: 2, text: '겨울철 타이어 교체 가이드', color: '#5555ff' }
-      ],
-      shortcuts: ['견적내기', '시승신청', '이벤트']
-    };
+  @Get('kakao/callback')
+  @UseGuards(AuthGuard('kakao'))
+  async kakaoLoginCallback(@Req() req, @Res() res: Response) {
+    console.log('📍 카카오 콜백 도달함!');
+    const user = await this.appService.handleKakaoLogin(req.user);
+    
+    // 프론트엔드 주소로 리다이렉트
+    return res.redirect(`${process.env.CLIENT_URL}/mypage?email=${user.email}&nickname=${encodeURIComponent(user.nickname)}`);
   }
 }
