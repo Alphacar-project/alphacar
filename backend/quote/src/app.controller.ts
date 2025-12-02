@@ -1,26 +1,35 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 
-@Controller('quote') // 주소 앞에 /quote가 자동으로 붙습니다.
+@Controller('quote')
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  // 1. 견적 초기 데이터 (차량 목록 등)
-  // 요청 주소: GET http://localhost:3000/quote
-  @Get()
-  getQuoteInitData() {
-    return {
-      message: '견적 페이지 데이터입니다.',
-      models: ['Avante', 'Sonata', 'Grandeur', 'Genesis'],
-      trims: ['Modern', 'Premium', 'Inspiration']
-    };
+  // 1. 제조사 목록 조회
+  // GET /quote/makers
+  @Get('makers')
+  getMakers() {
+    return this.appService.getManufacturers();
   }
 
-  // 2. 견적 저장하기 (POST)
-  // 요청 주소: POST http://localhost:3000/quote/save
-  @Post('save')
-  saveQuote(@Body() quoteData: any) {
-    console.log('받은 견적 데이터:', quoteData);
-    return { success: true, message: '견적이 임시 저장되었습니다.', id: 'temp_1234' };
+  // 2. 모델 목록 조회 (제조사 ID 필요)
+  // GET /quote/models?makerId=xxxx
+  @Get('models')
+  getModels(@Query('makerId') makerId: string) {
+    return this.appService.getModelsByManufacturer(makerId);
+  }
+
+  // 3. 트림 목록 조회 (모델 ID 필요)
+  // GET /quote/trims?modelId=xxxx
+  @Get('trims')
+  getTrims(@Query('modelId') modelId: string) {
+    return this.appService.getTrimsByModel(modelId);
+  }
+
+  // 4. 상세 결과 조회 (트림 ID 필요)
+  // GET /quote/detail?trimId=xxxx
+  @Get('detail')
+  getDetail(@Query('trimId') trimId: string) {
+    return this.appService.getTrimDetail(trimId);
   }
 }

@@ -2,6 +2,7 @@
 import "./globals.css";
 import Link from "next/link";
 import AiChatButton from "./AICHAT/AiChatButton";
+import RightSideBar from "./RightSideBar";   // 🔹 추가
 
 export const metadata = {
   title: "ALPHACAR",
@@ -22,12 +23,10 @@ export default function RootLayout({ children }) {
             justifyContent: "space-between",
           }}
         >
-          {/* 로고: ALPHACAR 클릭하면 / 로 이동 */}
           <Link href="/" style={{ textDecoration: "none", color: "black" }}>
             <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>ALPHACAR</h1>
           </Link>
 
-          {/* 상단 메뉴 */}
           <nav style={{ display: "flex", gap: "16px", fontSize: "14px" }}>
             <Link href="/quote">견적 비교</Link>
             <Link href="/drive">드라이브 코스</Link>
@@ -36,7 +35,7 @@ export default function RootLayout({ children }) {
           </nav>
         </header>
 
-        {/* 각 페이지 내용 */}
+        {/* 페이지 내용 */}
         <main
           style={{
             padding: "24px 32px",
@@ -47,8 +46,11 @@ export default function RootLayout({ children }) {
           {children}
         </main>
 
-        {/* 오른쪽 하단 AI 챗봇 버튼 + 팝업 */}
+        {/* 오른쪽 하단 AI 챗봇 */}
         <AiChatButton />
+
+        {/* 오른쪽 사이드 퀵메뉴 + TOP 버튼 */}
+        <RightSideBar />
       </body>
     </html>
   );

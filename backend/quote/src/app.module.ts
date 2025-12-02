@@ -1,14 +1,17 @@
+// backend/quote/src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { Manufacturer, ManufacturerSchema } from './schemas/manufacturer.schema';
+import { Vehicle, VehicleSchema } from './schemas/vehicle.schema';
+import { VehicleTrim, VehicleTrimSchema } from './schemas/vehicle_trim.schema';
 
 @Module({
   imports: [
-    // 1. 환경변수 설정
     ConfigModule.forRoot({ isGlobal: true }),
-    // 2. 몽고DB 연결
+    // 1. DB 연결 설정
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (config: ConfigService) => ({
@@ -16,6 +19,12 @@ import { AppService } from './app.service';
       }),
       inject: [ConfigService],
     }),
+    // 2. 컬렉션 3개 등록 (manufacturers, vehicles, vehicletrim)
+    MongooseModule.forFeature([
+      { name: Manufacturer.name, schema: ManufacturerSchema },
+      { name: Vehicle.name, schema: VehicleSchema },
+      { name: VehicleTrim.name, schema: VehicleTrimSchema },
+    ]),
   ],
   controllers: [AppController],
   providers: [AppService],
