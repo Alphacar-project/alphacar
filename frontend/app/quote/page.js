@@ -1,99 +1,139 @@
+// app/quote/page.js
 "use client";
 
-import { useEffect, useState } from "react";
-
-// 견적 서비스 백엔드 주소 (3003 포트)
-const API_BASE = process.env.NEXT_PUBLIC_QUOTE_API_URL;
+import Link from "next/link";
 
 export default function QuotePage() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-
-  // 페이지 처음 들어올 때 백엔드 /quote 호출
-  useEffect(() => {
-    async function fetchQuote() {
-      try {
-        if (!API_BASE) {
-          throw new Error("NEXT_PUBLIC_QUOTE_API_URL 환경변수가 없습니다.");
-        }
-
-        const res = await fetch(`${API_BASE}/quote`);
-        if (!res.ok) {
-          throw new Error("백엔드 응답 에러");
-        }
-        const json = await res.json();
-        setData(json);
-      } catch (err) {
-        console.error(err);
-        setError("견적 데이터를 불러오지 못했습니다.");
-      }
-    }
-
-    fetchQuote();
-  }, []);
-
   return (
     <div
       style={{
-        maxWidth: "960px",
-        margin: "0 auto",
-        backgroundColor: "white",
-        padding: "32px",
-        borderRadius: "12px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+        maxWidth: "1400px",
+        margin: "40px auto",
+        padding: "0 40px",
       }}
     >
-      <h2 style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "16px" }}>
-        견적 비교 페이지
-      </h2>
+      <section
+        style={{
+          background: "#ffffff",
+          borderRadius: "20px",
+          padding: "40px 40px 40px",
+          boxShadow: "0 4px 10px rgba(0,0,0,0.06)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "32px",
+          minHeight: "50vh",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* ---------------- 상단 : 질문 + 로고 ---------------- */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "40px",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#999",
+                marginBottom: "4px",
+              }}
+            >
+              ALPHACAR 내차 구매
+            </p>
+            <h1
+              style={{
+                fontSize: "28px",
+                lineHeight: 1.4,
+                marginBottom: "10px",
+              }}
+            >
+              어떤 방법으로 차량을
+              <br />
+              구매하고 싶으신가요?
+            </h1>
+            <p style={{ fontSize: "15px", color: "#666" }}>
+              최적의 차량 구매는 ALPHACAR에서 시작해 보세요.
+            </p>
+          </div>
 
-      {/* 상태 표시 */}
-      {error && (
-        <p style={{ color: "red", marginBottom: "12px" }}>{error}</p>
-      )}
-
-      {!error && !data && (
-        <p style={{ fontSize: "14px", color: "#666" }}>불러오는 중...</p>
-      )}
-
-      {/* 백엔드에서 온 데이터 표시 */}
-      {data && (
-        <div>
-          {/* message */}
-          <p style={{ marginBottom: "12px", fontSize: "14px", color: "#555" }}>
-            {data.message}
-          </p>
-
-          {/* 차량 모델 목록 */}
-          <h3 style={{ fontSize: "16px", marginBottom: "8px" }}>차량 모델</h3>
-          <ul style={{ paddingLeft: "18px", fontSize: "14px", marginBottom: "16px" }}>
-            {data.models?.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-
-          {/* 트림 목록 */}
-          <h3 style={{ fontSize: "16px", marginBottom: "8px" }}>트림</h3>
-          <ul style={{ paddingLeft: "18px", fontSize: "14px" }}>
-            {data.trims?.map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
-
-          {/* 디버깅용 전체 JSON 보기 */}
-          <pre
+          {/* 오른쪽 알파카 로고 */}
+          <div
             style={{
-              marginTop: "16px",
-              fontSize: "12px",
-              backgroundColor: "#f7f7f7",
-              padding: "12px",
-              borderRadius: "8px",
+              width: "260px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {JSON.stringify(data, null, 2)}
-          </pre>
+            <img
+              src="/logo/alphacar-logo.png"
+              alt="ALPHACAR 로고"
+              style={{
+                width: "100%",
+                maxWidth: "240px",
+                height: "auto",
+                display: "block",
+              }}
+            />
+          </div>
         </div>
-      )}
+
+        {/* ---------------- 하단 : 비교견적 / 개별견적 이미지 버튼 ---------------- */}
+        <div
+          style={{
+            display: "flex",
+            gap: "24px",
+            marginTop: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+          {/* 비교견적 큰 이미지 버튼 */}
+          <Link
+            href="/quote/compare"
+            style={{
+              flex: "1 1 0",
+              minWidth: "320px",
+              textDecoration: "none",
+            }}
+          >
+            <img
+              src="/quote/compare-full.jpg.png" // public/quote/compare-full.jpg.png
+              alt="비교견적 - 실시간 최저가 판매"
+              style={{
+                width: "100%",
+                display: "block",
+                borderRadius: "16px",
+                boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
+              }}
+            />
+          </Link>
+
+          {/* 개별견적 큰 이미지 버튼 */}
+          <Link
+            href="/quote/personal"
+            style={{
+              flex: "1 1 0",
+              minWidth: "320px",
+              textDecoration: "none",
+            }}
+          >
+            <img
+              src="/quote/personal-full.jpg.png" // public/quote/personal-full.jpg.png
+              alt="개별견적 - 원하는 차량 정보를 한눈에"
+              style={{
+                width: "100%",
+                display: "block",
+                borderRadius: "16px",
+                boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
+              }}
+            />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
