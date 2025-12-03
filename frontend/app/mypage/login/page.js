@@ -87,10 +87,17 @@ export default function MyPageLogin() {
     setPasswordVisible((prev) => !prev);
   };
 
-  // [기존] 카카오 로그인
+  // ✅ [수정완료] 카카오 로그인 (백엔드 거치지 않고 바로 카카오로 이동)
   const handleKakaoLogin = () => {
-    // 🔹 카카오 → 백엔드 → 다시 프론트로 리다이렉트
-    window.location.href = "http://192.168.0.160:3006/auth/kakao";
+    const REST_API_KEY = "342d0463be260fc289926a0c63c4badc"; // 고객님 키 적용
+    // 로그인 끝나면 다시 /mypage로 돌아와서 처리를 맡김 (8000번 포트 확인)
+    const REDIRECT_URI = "https://192.168.0.160:8000/mypage"; 
+    
+    // 카카오 인증 페이지 URL 생성
+    const kakaoURL = `https://kauth.kakao.com/oauth/authorize?client_id=${REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code`;
+    
+    // 이동!
+    window.location.href = kakaoURL;
   };
 
   // [수정] 이메일 로그인 처리 + 유저정보 저장
@@ -114,18 +121,6 @@ export default function MyPageLogin() {
       }
 
       const data = await res.json();
-
-      // ❗ 여기서 백엔드가 이런 형태로 보내준다고 가정
-      // {
-      //   access_token: "...",
-      //   user: {
-      //     nickname: "플렉스하는 알파카",
-      //     email: "AlphaFlex123@naver.com",
-      //     provider: "email",
-      //     point: 100,
-      //     quoteCount: 3
-      //   }
-      // }
 
       if (data.access_token && data.user) {
         alert("로그인 성공!");
@@ -412,4 +407,3 @@ export default function MyPageLogin() {
     </div>
   );
 }
-

@@ -22,6 +22,7 @@ export default function SpaceGamePage() {
   // 타이머 관리
   useEffect(() => {
     if (status !== "playing") return;
+
     if (timeLeft <= 0) {
       setStatus("end");
       return;
@@ -48,12 +49,15 @@ export default function SpaceGamePage() {
   const handleStart = () => {
     setStatus("playing");
     setTimeLeft(GAME_DURATION);
-    setScore(0);
+    setScore(0); // 🔹 항상 0부터 시작
     setStarPos(getRandomPos());
   };
 
   const handleStarClick = () => {
+    // 🔹 혹시 몰라서 방어 코드 유지
     if (status !== "playing") return;
+
+    // 🔹 이전 값 기준으로 확실하게 +1
     setScore((prev) => prev + 1);
     setStarPos(getRandomPos());
   };
@@ -69,7 +73,8 @@ export default function SpaceGamePage() {
     } else if (score >= 10) {
       message = "꽤 잘했어요! 한 번만 더 하면 우주까지 갈 수 있을 듯? 😎";
     } else {
-      message = "아쉽지만… 연습하면 분명 더 잘할 수 있어요! 다시 도전해 볼까요? 😆";
+      message =
+        "아쉽지만… 연습하면 분명 더 잘할 수 있어요! 다시 도전해 볼까요? 😆";
     }
   }
 
@@ -115,11 +120,14 @@ export default function SpaceGamePage() {
           >
             알파카 타고 우주 여행! ✨
           </div>
-          <div style={{ fontSize: "30px", fontWeight: 800, marginBottom: "6px" }}>
+          <div
+            style={{ fontSize: "30px", fontWeight: 800, marginBottom: "6px" }}
+          >
             9,999원 우주 별잡기 게임
           </div>
           <div style={{ fontSize: "13px", color: "#9ca3af" }}>
-            제한 시간 {GAME_DURATION}초 동안, 움직이는 ⭐를 최대한 많이 클릭해 보세요!
+            제한 시간 {GAME_DURATION}초 동안, 움직이는 ⭐를 최대한 많이 클릭해
+            보세요!
           </div>
         </div>
 
@@ -148,7 +156,7 @@ export default function SpaceGamePage() {
                 border: "1px solid rgba(148,163,184,0.4)",
                 background:
                   "radial-gradient(circle at top, rgba(56,189,248,0.35) 0%, #020617 55%, #020617 100%)",
-                height: "500px", // 🔹 게임판 높이 약 1.2배
+                height: "500px", // 🔹 게임판 높이
                 position: "relative",
                 overflow: "hidden",
               }}
@@ -195,6 +203,7 @@ export default function SpaceGamePage() {
               {/* 클릭할 별 ⭐ */}
               {status !== "end" && (
                 <button
+                  type="button"
                   onClick={handleStarClick}
                   style={{
                     position: "absolute",
@@ -232,18 +241,36 @@ export default function SpaceGamePage() {
                 >
                   {status === "ready" && (
                     <>
-                      <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "6px" }}>
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: 700,
+                          marginBottom: "6px",
+                        }}
+                      >
                         게임 준비 완료!
                       </div>
-                      <div>아래의 &ldquo;게임 시작하기&rdquo; 버튼을 누르면 별이 빠르게 움직이기 시작합니다.</div>
+                      <div>
+                        아래의 &ldquo;게임 시작하기&rdquo; 버튼을 누르면 별이
+                        빠르게 움직이기 시작합니다.
+                      </div>
                     </>
                   )}
                   {status === "end" && (
                     <>
-                      <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "6px" }}>
+                      <div
+                        style={{
+                          fontSize: "18px",
+                          fontWeight: 700,
+                          marginBottom: "6px",
+                        }}
+                      >
                         게임 종료!
                       </div>
-                      <div>결과는 오른쪽에서 확인하고, 다시 도전하거나 지구로 돌아가 볼까요? 🌍</div>
+                      <div>
+                        결과는 오른쪽에서 확인하고, 다시 도전하거나 지구로
+                        돌아가 볼까요? 🌍
+                      </div>
                     </>
                   )}
                 </div>
@@ -327,7 +354,10 @@ export default function SpaceGamePage() {
               >
                 <span>게임 진행도</span>
                 <span>
-                  {Math.floor(((GAME_DURATION - timeLeft) / GAME_DURATION) * 100)}%
+                  {Math.floor(
+                    ((GAME_DURATION - timeLeft) / GAME_DURATION) * 100
+                  )}
+                  %
                 </span>
               </div>
               <div
@@ -341,7 +371,9 @@ export default function SpaceGamePage() {
               >
                 <div
                   style={{
-                    width: `${((GAME_DURATION - timeLeft) / GAME_DURATION) * 100}%`,
+                    width: `${
+                      ((GAME_DURATION - timeLeft) / GAME_DURATION) * 100
+                    }%`,
                     height: "100%",
                     borderRadius: "999px",
                     background:
@@ -379,6 +411,7 @@ export default function SpaceGamePage() {
               {/* 메인 액션 버튼 */}
               {status !== "playing" ? (
                 <button
+                  type="button"
                   onClick={handleStart}
                   style={{
                     width: "100%",
@@ -398,6 +431,7 @@ export default function SpaceGamePage() {
                 </button>
               ) : (
                 <button
+                  type="button"
                   disabled
                   style={{
                     width: "100%",
@@ -424,6 +458,7 @@ export default function SpaceGamePage() {
                 }}
               >
                 <button
+                  type="button"
                   onClick={handleStart}
                   style={{
                     flex: 1,

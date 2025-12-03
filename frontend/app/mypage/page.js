@@ -1,11 +1,15 @@
 // app/mypage/page.js
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function MyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // URL 파라미터 가져오기
+  const code = searchParams.get("code");  // ?code=... 값 추출
+
   const [guestCode, setGuestCode] = useState("");
   const [showBanner, setShowBanner] = useState(true);
 
@@ -13,24 +17,56 @@ export default function MyPage() {
   const [user, setUser] = useState(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
 
-  // 최초 한 번: localStorage에서 유저 정보 읽기
+  // 로직 통합: (1) 카카오 로그인 처리 OR (2) 기존 로컬스토리지 확인
   useEffect(() => {
-    try {
-      const saved =
-        typeof window !== "undefined"
-          ? localStorage.getItem("alphacarUser")
-          : null;
-      if (saved) {
-        setUser(JSON.parse(saved));
+    const processAuth = async () => {
+      // Case 1: 카카오 로그인 후 리다이렉트 된 경우 (URL에 코드가 있음)
+      if (code) {
+        try {
+          console.log("🚀 [DEBUG] 백엔드로 로그인 요청 보냄 (3006번)");
+          
+          // ✅ [수정완료] HTTPS 주소로 변경! (백엔드와 보안 통신)
+          const response = await axios.post("https://192.168.0.160:8000/auth/kakao-login", { code });
+          const { access_token, user: loggedInUser } = response.data;
+
+          // 정보 저장
+          localStorage.setItem("accessToken", access_token);
+          localStorage.setItem("alphacarUser", JSON.stringify(loggedInUser));
+
+          // 상태 업데이트 및 환영 메시지
+          setUser(loggedInUser);
+          alert(`${loggedInUser.nickname}님 환영합니다!`);
+
+          // URL에서 보기 싫은 ?code=... 제거 (새로고침 없이 주소만 변경)
+          router.replace("/mypage");
+        } catch (error) {
+          console.error("로그인 처리 실패:", error);
+          alert("로그인에 실패했습니다. 백엔드(3006번) 연결 상태를 확인해주세요.");
+          router.push("/mypage"); // 실패 시에도 코드를 없애기 위해 이동
+        } finally {
+          setCheckedAuth(true); // 로딩 끝
+        }
+      } 
+      // Case 2: 일반 접속 (저장된 정보 불러오기)
+      else {
+        try {
+          const saved = typeof window !== "undefined" ? localStorage.getItem("alphacarUser") : null;
+          if (saved) {
+            setUser(JSON.parse(saved));
+          }
+        } catch (e) {
+          console.error("유저정보 파싱 오류", e);
+        } finally {
+          setCheckedAuth(true); // 로딩 끝
+        }
       }
-    } catch (e) {
-      console.error("유저정보 파싱 오류", e);
-    } finally {
-      setCheckedAuth(true);
-    }
-  }, []);
+    };
+
+    processAuth();
+  }, [code, router]);
 
   const handleLoginClick = () => {
+    // ✅ 로그인 페이지로 이동 (여기서 카카오 로그인 버튼을 누르게 됨)
     router.push("/mypage/login");
   };
 
@@ -356,4 +392,3 @@ export default function MyPage() {
     </div>
   );
 }
-

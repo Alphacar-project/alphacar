@@ -31,109 +31,142 @@ export default function YouTubeSection() {
     },
   ];
 
-  const [startIndex, setStartIndex] = useState(0);
+  const [index, setIndex] = useState(0);
 
+  // 5초마다 자동으로 다음 영상
   useEffect(() => {
-    if (videos.length <= 2) return;
+    if (videos.length <= 1) return;
 
     const timer = setInterval(() => {
-      setStartIndex((prev) => (prev + 2) % videos.length);
+      setIndex((prev) => (prev + 1) % videos.length);
     }, 5000);
 
     return () => clearInterval(timer);
   }, [videos.length]);
 
-  const getVisibleVideos = () => {
-    if (videos.length <= 2) return videos;
-    const result = [];
-    for (let i = 0; i < 2; i++) {
-      const idx = (startIndex + i) % videos.length;
-      result.push(videos[idx]);
-    }
-    return result;
-  };
-
-  const visibleVideos = getVisibleVideos();
+  const current = videos[index];
 
   const handleNext = () => {
-    if (videos.length <= 2) return;
-    setStartIndex((prev) => (prev + 2) % videos.length);
+    if (videos.length <= 1) return;
+    setIndex((prev) => (prev + 1) % videos.length);
   };
 
   return (
-    <div style={{ width: "100%", padding: "32px 0" }}>
-      {/* 타이틀 + 버튼 */}
+    <div
+      // 🔒 고정 크기 (반응형 X)
+      style={{
+        width: 340,
+        height: 230,
+      }}
+    >
+      {/* 상단 타이틀 + 다른 영상 보기 버튼 */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "16px",
+          marginBottom: 6,
         }}
       >
-        <h2
+        <span
           style={{
-            fontSize: "22px",
-            fontWeight: "700",
+            fontSize: 13,
+            fontWeight: 700,
           }}
         >
-          ALPHACAR 오늘의 추천 영상을 확인해 보세요
-        </h2>
-
+          ALPHACAR 오늘의 추천 영상
+        </span>
         <button
           onClick={handleNext}
           style={{
             border: "none",
             background: "none",
-            color: "#555",
-            fontSize: "14px",
-            cursor: videos.length > 2 ? "pointer" : "default",
+            color: "#777",
+            fontSize: 11,
+            cursor: videos.length > 1 ? "pointer" : "default",
           }}
         >
           다른 영상 보기 &gt;
         </button>
       </div>
 
-      {/* 썸네일 2개 */}
-      <div style={{ display: "flex", gap: "16px" }}>
-        {visibleVideos.map((v) => (
-          <a
-            key={v.id}
-            href={`https://www.youtube.com/watch?v=${v.id}`}
-            target="_blank"
-            rel="noreferrer"
+      {/* 🔴 유튜브 TV 프레임 (영상 밑 글씨 없음!) */}
+      <a
+        href={`https://www.youtube.com/watch?v=${current.id}`}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: "block",
+          width: 340,
+          textDecoration: "none",
+          color: "#000",
+        }}
+      >
+        {/* TV 몸통 */}
+        <div
+          style={{
+            width: 320,
+            height: 190,
+            backgroundColor: "#FF0000",
+            borderRadius: 24,
+            padding: 8,
+            boxSizing: "border-box",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            margin: "0 auto",
+          }}
+        >
+          {/* 검은 화면 안에 썸네일 */}
+          <div
             style={{
-              flex: 1,
-              cursor: "pointer",
-              textDecoration: "none",
-              color: "#000",
+              width: "100%",
+              height: 160,
+              backgroundColor: "#000",
+              borderRadius: 18,
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <img
-              src={v.thumbnail}
-              alt={v.title}
+              src={current.thumbnail}
+              alt={current.title}
               style={{
                 width: "100%",
-                aspectRatio: "16/9",   // 16:9 비율 유지
-                objectFit: "contain",   // 이미지 안 잘리게
-                borderRadius: "12px",
-                backgroundColor: "#000", // 위아래 여백 생길 때 깔끔하게
+                height: "100%",
+                objectFit: "contain",
               }}
             />
-            <p
+          </div>
+
+          {/* TV 다리(발) */}
+          <div
+            style={{
+              marginTop: 6,
+              display: "flex",
+              justifyContent: "center",
+              gap: 12,
+            }}
+          >
+            <div
               style={{
-                fontSize: "14px",
-                marginTop: "8px",
-                fontWeight: "600",
-                lineHeight: "1.4",
+                width: 28,
+                height: 6,
+                borderRadius: 999,
+                backgroundColor: "#B00000",
               }}
-            >
-              {v.title}
-            </p>
-            <p style={{ fontSize: "12px", color: "#777" }}>{v.channel}</p>
-          </a>
-        ))}
-      </div>
+            />
+            <div
+              style={{
+                width: 28,
+                height: 6,
+                borderRadius: 999,
+                backgroundColor: "#B00000",
+              }}
+            />
+          </div>
+        </div>
+      </a>
     </div>
   );
 }

@@ -1,18 +1,18 @@
-// src/main.ts (모든 NestJS 프로젝트에 적용)
+// src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ CORS 설정: 모든 오리진 (*) 허용
   app.enableCors({
-    origin: '*', 
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    // FE 주소 허용 (다른 컴퓨터에서 접속하므로 IP 사용)
+    origin: ['https://192.168.0.160', 'https://192.168.0.160:8000', 'http://192.168.0.160:8000'], 
     credentials: true,
   });
-  
-  // 포트 번호는 각 프로젝트에 맞게 유지 (3002, 3003, 3004 등)
-  await app.listen(3006); 
+
+  // 3006 포트로 열고 0.0.0.0 바인딩 (IP 접속 문제 해결)
+  await app.listen(3006, '0.0.0.0'); 
+  console.log(`MyPage Service is running on port 3006`);
 }
 bootstrap();

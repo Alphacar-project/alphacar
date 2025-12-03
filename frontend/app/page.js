@@ -7,6 +7,10 @@ import Link from "next/link";
 import { fetchMainData } from "../lib/api";
 import YouTubeSection from "./components/YouTubeSection";
 
+// 유튜브 위젯을 보여줄 최소 화면 폭 (px)
+const YOUTUBE_MIN_WIDTH = 1650;
+
+    // 배너 데이터
 // 배너 데이터
 const bannerItems = [
   {
@@ -85,7 +89,6 @@ export default function HomePage() {
   const [bannerIndex, setBannerIndex] = useState(0);
   const [topCarIndex, setTopCarIndex] = useState(0);
 
-  // SSR hydration-safe index (서버=0, 클라이언트=실제값)
   const safeBannerIndex =
     typeof window === "undefined" ? 0 : bannerIndex;
   const safeTopCarIndex =
@@ -100,6 +103,21 @@ export default function HomePage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 12;
+
+  // ✅ 화면 폭에 따라 유튜브 보일지 말지 결정
+  const [showYoutube, setShowYoutube] = useState(true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window === "undefined") return;
+      // 화면 폭이 충분히 넓을 때만 유튜브 보여줌
+      setShowYoutube(window.innerWidth >= YOUTUBE_MIN_WIDTH);
+    };
+
+    handleResize(); // 처음 진입 시 한 번 체크
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // 배너 자동 슬라이드
   useEffect(() => {
@@ -181,6 +199,20 @@ export default function HomePage() {
 
   return (
     <div className="page-wrapper">
+      {/* 🟡 오른쪽 상단 고정 유튜브 카드 - 화면이 넓을 때만 보여줌 */}
+      {showYoutube && (
+        <div
+          style={{
+            position: "fixed",
+            top: "170px", // 배너 안 가리게 살짝 아래
+            right: "20px",
+            zIndex: 1000,
+          }}
+        >
+          <YouTubeSection />
+        </div>
+      )}
+
       {errorMsg && (
         <div
           style={{
@@ -216,7 +248,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 🔍 검색창 - 배너와 같은 폭으로 확장 */}
+      {/* 검색창 */}
       <section
         style={{
           margin: "30px auto",
@@ -362,16 +394,6 @@ export default function HomePage() {
             </div>
           </div>
         )}
-      </section>
-
-      {/* 🎬 ALPHACAR 유튜브 추천 섹션 */}
-      <section
-        style={{
-          margin: "40px auto 0",
-          padding: "0 40px",
-        }}
-      >
-        <YouTubeSection />
       </section>
 
       {/* 브랜드 탭 + 차량 리스트 */}
