@@ -7,7 +7,7 @@ async function bootstrap() {
 
   app.enableCors({
     // FE 주소 허용 (다른 컴퓨터에서 접속하므로 IP 사용)
-    origin: ['https://192.168.0.160', 'https://192.168.0.160:8000', 'http://192.168.0.160:8000'], 
+    origin: ['https://192.168.0.160', 'https://192.168.0.160:8000', 'http://192.168.0.160:8000', 'https://192.168.0.160.nip.io:8000'], 
     credentials: true,
   });
 

@@ -1,4 +1,4 @@
-// app/mypage/page.js
+// frontend/app/mypage/page.js
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
@@ -7,8 +7,11 @@ import axios from "axios";
 
 export default function MyPage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // URL 파라미터 가져오기
-  const code = searchParams.get("code");  // ?code=... 값 추출
+  const searchParams = useSearchParams();
+  const code = searchParams.get("code");
+  
+  // ✅ [추가] state 파라미터 가져오기 (누가 보냈는지 확인: kakao / google)
+  const state = searchParams.get("state"); 
 
   const [guestCode, setGuestCode] = useState("");
   const [showBanner, setShowBanner] = useState(true);
@@ -17,16 +20,25 @@ export default function MyPage() {
   const [user, setUser] = useState(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
 
-  // 로직 통합: (1) 카카오 로그인 처리 OR (2) 기존 로컬스토리지 확인
+  // 로직 통합: (1) 소셜 로그인 처리 OR (2) 기존 로컬스토리지 확인
   useEffect(() => {
     const processAuth = async () => {
-      // Case 1: 카카오 로그인 후 리다이렉트 된 경우 (URL에 코드가 있음)
+      // Case 1: 소셜 로그인 후 리다이렉트 된 경우 (URL에 코드가 있음)
       if (code) {
         try {
-          console.log("🚀 [DEBUG] 백엔드로 로그인 요청 보냄 (3006번)");
+          let response;
           
-          // ✅ [수정완료] HTTPS 주소로 변경! (백엔드와 보안 통신)
-          const response = await axios.post("https://192.168.0.160:8000/auth/kakao-login", { code });
+          // 🔀 [분기 처리] state 값에 따라 요청할 백엔드 주소 변경
+          if (state === "google") {
+            console.log("🔵 [DEBUG] 구글 로그인 요청 (state=google)");
+            // 구글 로그인 요청 (HTTPS & 8000번)
+            response = await axios.post("https://192.168.0.160.nip.io:8000/auth/google-login", { code });
+          } else {
+            console.log("🟡 [DEBUG] 카카오 로그인 요청 (state=kakao 또는 없음)");
+            // 카카오 로그인 요청 (기본값)
+            response = await axios.post("https://192.168.0.160.nip.io:8000/auth/kakao-login", { code });
+          }
+
           const { access_token, user: loggedInUser } = response.data;
 
           // 정보 저장
@@ -37,14 +49,14 @@ export default function MyPage() {
           setUser(loggedInUser);
           alert(`${loggedInUser.nickname}님 환영합니다!`);
 
-          // URL에서 보기 싫은 ?code=... 제거 (새로고침 없이 주소만 변경)
+          // URL에서 보기 싫은 ?code=... 제거
           router.replace("/mypage");
         } catch (error) {
-          console.error("로그인 처리 실패:", error);
-          alert("로그인에 실패했습니다. 백엔드(3006번) 연결 상태를 확인해주세요.");
-          router.push("/mypage"); // 실패 시에도 코드를 없애기 위해 이동
+          console.error("로그인 실패:", error);
+          alert("로그인에 실패했습니다. 백엔드 연결을 확인해주세요.");
+          router.replace("/mypage"); // 실패 시에도 URL 정리
         } finally {
-          setCheckedAuth(true); // 로딩 끝
+          setCheckedAuth(true);
         }
       } 
       // Case 2: 일반 접속 (저장된 정보 불러오기)
@@ -63,10 +75,19 @@ export default function MyPage() {
     };
 
     processAuth();
-  }, [code, router]);
+  }, [code, router, state]); // state 의존성 추가
+
+  // 로그아웃 기능
+  const handleLogout = () => {
+    if (confirm("정말 로그아웃 하시겠습니까?")) {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("alphacarUser");
+      setUser(null);
+      alert("로그아웃 되었습니다.");
+    }
+  };
 
   const handleLoginClick = () => {
-    // ✅ 로그인 페이지로 이동 (여기서 카카오 로그인 버튼을 누르게 됨)
     router.push("/mypage/login");
   };
 
@@ -76,12 +97,9 @@ export default function MyPage() {
       alert("견적번호를 입력해주세요.");
       return;
     }
-
-    // TODO: 비회원 견적 조회 페이지 연결 시 여기 수정
     alert(`비회원 견적 조회 준비 중입니다. (입력값: ${guestCode})`);
   };
 
-  // 아직 localStorage 검사 전이면 잠깐 로딩 화면
   if (!checkedAuth) {
     return (
       <div style={{ padding: "60px 16px" }}>마이페이지 불러오는 중...</div>
@@ -105,7 +123,7 @@ export default function MyPage() {
           <img
             src="/banners/alphacar-space.png"
             alt=""
-            onError={() => setShowBanner(false)} // 깨지면 배너 숨김
+            onError={() => setShowBanner(false)}
             style={{
               width: "100%",
               display: "block",
@@ -116,7 +134,7 @@ export default function MyPage() {
         )}
       </aside>
 
-      {/* 오른쪽 메인 영역 (왼쪽 정렬) */}
+      {/* 오른쪽 메인 영역 */}
       <main
         style={{
           flex: 1,
@@ -130,50 +148,79 @@ export default function MyPage() {
              ✅ 로그인 후 마이페이지 화면
              =========================== */
           <div style={{ width: "100%", maxWidth: "520px" }}>
-            {/* 프로필 영역 */}
-            <section style={{ marginBottom: "32px" }}>
-              <h1
-                style={{
-                  fontSize: "26px",
-                  fontWeight: 700,
-                  marginBottom: "8px",
-                }}
-              >
-                {user.nickname || "플렉스하는 알파카"}
-              </h1>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "14px",
-                }}
-              >
-                {/* 로그인 수단 뱃지 */}
-                <span
+            {/* 프로필 영역 (Flex 적용하여 버튼 우측 배치) */}
+            <section
+              style={{
+                marginBottom: "32px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start"
+              }}
+            >
+              {/* 왼쪽: 닉네임 및 정보 */}
+              <div>
+                <h1
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "4px 10px",
-                    borderRadius: "999px",
-                    background:
-                      user.provider === "kakao"
-                        ? "#FEE500"
-                        : user.provider === "google"
-                        ? "#E8F0FE"
-                        : "#f3f4f6",
-                    fontSize: "12px",
-                    fontWeight: 600,
+                    fontSize: "26px",
+                    fontWeight: 700,
+                    marginBottom: "8px",
+                    lineHeight: "1.2",
                   }}
                 >
-                  {(user.provider || "email").toUpperCase()}
-                </span>
-                <span style={{ color: "#555" }}>
-                  {user.email || "AlphaFlex123@naver.com"}
-                </span>
+                  {user.nickname || "플렉스하는 알파카"}
+                </h1>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "14px",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      background:
+                        user.provider === "kakao"
+                          ? "#FEE500"
+                          : user.provider === "google"
+                          ? "#E8F0FE"
+                          : "#f3f4f6",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {(user.provider || "email").toUpperCase()}
+                  </span>
+                  <span style={{ color: "#555" }}>
+                    {user.email || "AlphaFlex123@naver.com"}
+                  </span>
+                </div>
               </div>
+
+              {/* 오른쪽: 로그아웃 버튼 (검은색 박스) */}
+              <button
+                onClick={handleLogout}
+                style={{
+                  backgroundColor: "#000", // 검은색 배경
+                  color: "#fff",           // 흰색 글씨
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                로그아웃
+              </button>
             </section>
 
             {/* 견적함 / 포인트 카드 */}
@@ -195,40 +242,18 @@ export default function MyPage() {
                   textAlign: "center",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#777",
-                    marginBottom: "6px",
-                  }}
-                >
+                <div style={{ fontSize: "14px", color: "#777", marginBottom: "6px" }}>
                   견적함
                 </div>
-                <div
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: 700,
-                  }}
-                >
+                <div style={{ fontSize: "20px", fontWeight: 700 }}>
                   {user.quoteCount ?? 0}건
                 </div>
               </div>
               <div style={{ padding: "20px", textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#777",
-                    marginBottom: "6px",
-                  }}
-                >
+                <div style={{ fontSize: "14px", color: "#777", marginBottom: "6px" }}>
                   포인트
                 </div>
-                <div
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: 700,
-                  }}
-                >
+                <div style={{ fontSize: "20px", fontWeight: 700 }}>
                   {user.point ?? 0}P
                 </div>
               </div>
@@ -259,7 +284,7 @@ export default function MyPage() {
                     cursor: "pointer",
                     borderTop: idx === 0 ? "none" : "1px solid #f3f4f6",
                   }}
-                  onClick={() => alert(`${label} 준비 중입니다.`)} // TODO: 페이지 연결
+                  onClick={() => alert(`${label} 준비 중입니다.`)}
                 >
                   <span>{label}</span>
                   <span style={{ fontSize: "18px" }}>›</span>
@@ -272,13 +297,12 @@ export default function MyPage() {
              👤 로그인 전 (기존 화면 그대로)
              =========================== */
           <>
-            {/* 히어로 영역 */}
             <section
               style={{
                 textAlign: "center",
                 marginBottom: "40px",
                 width: "100%",
-                maxWidth: "520px", // 🔹 폭 고정해서 배너 바로 옆에 위치
+                maxWidth: "520px",
               }}
             >
               <h1
@@ -329,7 +353,6 @@ export default function MyPage() {
               />
             </section>
 
-            {/* 비회원 견적함 */}
             <section style={{ width: "100%", maxWidth: "520px" }}>
               <div
                 style={{

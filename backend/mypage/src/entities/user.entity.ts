@@ -6,8 +6,8 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true, name: 'kakao_id' })
-  kakaoId: string;
+  @Column({ unique: true, name: 'socialId' })
+  socialId: string;
 
   @Column({ nullable: true })
   nickname: string;

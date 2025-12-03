@@ -86,12 +86,21 @@ export default function MyPageLogin() {
   const togglePassword = () => {
     setPasswordVisible((prev) => !prev);
   };
+  // 🔵 구글 로그인
+  const handleGoogleLogin = () => {
+    const CLIENT_ID = "1030657487130-g7891k55pfhijc8gh1kedccnkf75v2qf.apps.googleusercontent.com";
+    // 👇 [수정] nip.io 도메인 사용
+    const REDIRECT_URI = "https://192.168.0.160.nip.io:8000/mypage";
+
+    const googleURL = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=email profile&state=google`;
+    window.location.href = googleURL;
+  };
 
   // ✅ [수정완료] 카카오 로그인 (백엔드 거치지 않고 바로 카카오로 이동)
   const handleKakaoLogin = () => {
     const REST_API_KEY = "342d0463be260fc289926a0c63c4badc"; // 고객님 키 적용
     // 로그인 끝나면 다시 /mypage로 돌아와서 처리를 맡김 (8000번 포트 확인)
-    const REDIRECT_URI = "https://192.168.0.160:8000/mypage"; 
+    const REDIRECT_URI = "https://192.168.0.160.nip.io:8000/mypage"; 
     
     // 카카오 인증 페이지 URL 생성
     const kakaoURL = `https://kauth.kakao.com/oauth/authorize?client_id=${REST_API_KEY}&redirect_uri=${REDIRECT_URI}&response_type=code`;
@@ -366,6 +375,7 @@ export default function MyPageLogin() {
         {/* 구글 */}
         <button
           type="button"
+	  onClick={handleGoogleLogin}
           style={{
             width: "100%",
             height: "48px",

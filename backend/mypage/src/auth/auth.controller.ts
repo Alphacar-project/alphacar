@@ -25,4 +25,10 @@ export class AuthController {
   async kakaoLoginCallback(@Body('code') code: string) {
     return this.authService.kakaoLogin(code);
   }
+
+  // ✅ [추가] 구글 로그인 (이게 없어서 404가 떴던 겁니다!)
+  @Post('google-login')
+  async googleLogin(@Body('code') code: string) {
+    return this.authService.googleLogin(code);
+  }
 }
