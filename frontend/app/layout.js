@@ -28,7 +28,7 @@ export default function RootLayout({ children }) {
 
           <nav style={{ display: "flex", gap: "16px", fontSize: "14px" }}>
             <Link href="/quote">견적 비교</Link>
-            <Link href="/drive">드라이브 코스</Link>
+            <Link href="/news">소식</Link>
             <Link href="/community">커뮤니티</Link>
             <Link href="/mypage">마이페이지</Link>
           </nav>

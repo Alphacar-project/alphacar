@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // 백엔드 API 주소 (3003번 포트 확인)
 const API_BASE = "http://192.168.0.160:3003/quote";
@@ -217,6 +217,8 @@ function CarOptionSelectCard({ data, selectedSet, onToggle }) {
 // ---------------- [3] 메인 페이지 ----------------
 export default function CompareQuotePage() {
   const router = useRouter();
+  // ✅ [수정 2] useSearchParams 훅 사용
+  const searchParams = useSearchParams();
   
   // 차량 상세 정보 상태
   const [car1Data, setCar1Data] = useState(null);
@@ -240,6 +242,30 @@ export default function CompareQuotePage() {
       return null;
     }
   };
+	
+  // ✅ [수정 3] URL 파라미터를 읽어와서 초기 데이터 세팅하는 useEffect 추가
+  useEffect(() => {
+    const car1_trimId = searchParams.get("car1_trimId");
+    const car1_options_str = searchParams.get("car1_options");
+
+    // trimId가 URL에 있다면 자동으로 데이터 가져오기
+    if (car1_trimId) {
+      fetchCarDetail(car1_trimId).then((data) => {
+        if (data) {
+          setCar1Data(data);
+          // 옵션 정보도 URL에 있다면 세팅
+          if (car1_options_str) {
+            const optsArray = car1_options_str.split(",");
+            // 빈 문자열 제거 및 Set으로 변환
+            const validOpts = optsArray.filter(id => id && id.trim() !== "");
+            setCar1Opts(new Set(validOpts));
+          } else {
+            setCar1Opts(new Set());
+          }
+        }
+      });
+    }
+  }, [searchParams]);
 
   // 차량 1 선택 완료 핸들러 (트림 ID만 받음)
   const handleSelect1 = async (trimId) => {

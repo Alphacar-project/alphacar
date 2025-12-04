@@ -1,9 +1,8 @@
-// kevin@devserver:~/alphacar/frontend/app/page.js
+// app/page.js
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { fetchMainData } from "../lib/api";
 import YouTubeSection from "./components/YouTubeSection";
 
@@ -15,17 +14,17 @@ const bannerItems = [
   {
     id: 1,
     img: "/banners/banner1.png",
-    link: "/cashback", // ✅ 1번 배너: 캐시백 페이지
+    link: "/cashback", // 1번 배너: 캐시백 페이지
   },
   {
     id: 2,
     img: "/banners/banner2.png",
-    link: "/benefit", // ✅ 2번 배너: 내차 구매 혜택 안내 페이지
+    link: "/benefit", // 2번 배너: 내차 구매 혜택 안내 페이지
   },
   {
     id: 3,
     img: "/banners/banner3.png",
-    link: "/quote", // ✅ 3번 배너: 비교 견적 페이지
+    link: "/quote", // 3번 배너: 비교 견적 페이지
   },
 ];
 
@@ -152,7 +151,6 @@ export default function HomePage() {
   const router = useRouter();
 
   const [bannerIndex, setBannerIndex] = useState(0);
-
   const safeBannerIndex =
     typeof window === "undefined" ? 0 : bannerIndex;
 
@@ -166,13 +164,12 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 12;
 
-  // ✅ 화면 폭에 따라 유튜브 보일지 말지 결정
+  // 화면 폭에 따라 유튜브 보일지 말지 결정
   const [showYoutube, setShowYoutube] = useState(true);
 
   useEffect(() => {
     const handleResize = () => {
       if (typeof window === "undefined") return;
-      // 화면 폭이 충분히 넓을 때만 유튜브 보여줌
       setShowYoutube(window.innerWidth >= YOUTUBE_MIN_WIDTH);
     };
 
@@ -252,14 +249,14 @@ export default function HomePage() {
 
   return (
     <div className="page-wrapper">
-      {/* 🟡 오른쪽 상단 고정 유튜브 카드 - 화면이 넓을 때만 보여줌 */}
+      {/* 오른쪽 상단 고정 유튜브 카드 - 화면이 넓을 때만 보여줌 */}
       {showYoutube && (
         <div
           style={{
             position: "fixed",
-            top: "170px", // 배너 안 가리게 살짝 아래
+            top: "130px", // 필요하면 숫자 조금씩 조절
             right: "2px",
-            zIndex: 1000,
+            zIndex: 10,
           }}
         >
           <YouTubeSection />
@@ -455,7 +452,7 @@ export default function HomePage() {
                     gap: "8px",
                   }}
                 >
-                  {/* 썸네일 자리 (나중에 이미지 들어갈 자리) */}
+                  {/* 썸네일 자리 */}
                   <div
                     style={{
                       width: "56px",
@@ -558,7 +555,7 @@ export default function HomePage() {
                     gap: "8px",
                   }}
                 >
-                  {/* 썸네일 자리 (나중에 이미지 들어갈 자리) */}
+                  {/* 썸네일 자리 */}
                   <div
                     style={{
                       width: "56px",
@@ -646,7 +643,6 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* ✅ 이름 + 가격 가운데 정렬, 상세보기 버튼 제거 */}
               <div
                 className="car-info"
                 style={{ alignItems: "center", textAlign: "center" }}

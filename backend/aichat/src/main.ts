@@ -1,18 +1,24 @@
-// src/main.ts (모든 NestJS 프로젝트에 적용)
+// backend/aichat/src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ CORS 설정: 모든 오리진 (*) 허용
+  // ✅ [수정] CORS 설정: 실제 운영 중인 사이트 주소 허용
   app.enableCors({
-    origin: '*', 
+    origin: [
+      'https://192.168.0.160.nip.io:8000', // 팀 서버 주소 (HTTPS)
+      'http://localhost:8000',             // 로컬 테스트용
+      'http://127.0.0.1:8000'              // (혹시 몰라 추가)
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-  
-  // 포트 번호는 각 프로젝트에 맞게 유지 (3002, 3003, 3004 등)
-  await app.listen(3008);
+
+  // ✅ 포트는 4000번 유지 (8000번과 겹치지 않게)
+  const port = process.env.PORT || 4000;
+  await app.listen(port);
+  console.log(`🚀 AI Chat Service is running on port ${port}`);
 }
 bootstrap();

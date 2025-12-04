@@ -73,6 +73,29 @@ export default function QuoteResultPage() {
     };
   }, [carDetail, options]);
 
+  // ✅ [기능 추가] 비교 견적 페이지 이동 핸들러
+  // UI에는 영향을 주지 않고 로직만 수행합니다.
+  const handleCompareClick = () => {
+    // --- 디버깅용 로그 추가 ---
+    console.log("현재 trimId:", trimId);
+    console.log("전체 옵션 목록:", options);
+    // 1. 현재 선택된 옵션 ID 추출
+    const selectedOptionIds = options
+      .filter((o) => o.isSelected)
+      .map((o) => o.id);
+
+    // 2. 쿼리 파라미터 생성 (car1_trimId, car1_options)
+    const queryString = new URLSearchParams({
+      car1_trimId: trimId,
+      car1_options: selectedOptionIds.join(","),
+    }).toString();
+
+    console.log("생성된 쿼리 스트링:", queryString); // 이 로그가 빈칸으로 나오는지 확인
+
+    // 3. 페이지 이동
+    router.push(`/quote/compare?${queryString}`);
+  };
+
   if (loading)
     return (
       <div style={{ padding: "40px", textAlign: "center" }}>로딩 중...</div>
@@ -326,6 +349,7 @@ export default function QuoteResultPage() {
           </button>
           <button
             type="button"
+            onClick={handleCompareClick} // ✅ 여기에만 기능 연결 (UI 변경 없음)
             style={{
               flex: 1,
               maxWidth: "220px",
@@ -346,4 +370,3 @@ export default function QuoteResultPage() {
     </div>
   );
 }
-
