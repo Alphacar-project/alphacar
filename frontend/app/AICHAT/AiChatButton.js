@@ -6,13 +6,13 @@ export default function AiChatButton() {
   const [open, setOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
 
-  // 1. 채팅 관련 상태
-  const [messages, setMessages] = useState([
-    {
-      role: "system",
-      content: "안녕하세요! ALPHACAR AI 챗봇입니다. 무엇을 도와드릴까요?",
-    },
-  ]);
+  // 초기 메시지 상수 (재사용을 위해 분리)
+  const INITIAL_MESSAGE = {
+    role: "system",
+    content: "안녕하세요! ALPHACAR AI 챗봇입니다. 무엇을 도와드릴까요?",
+  };
+
+  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
@@ -37,7 +37,16 @@ export default function AiChatButton() {
     }
   }, [messages, loading]);
 
-  // 2. 메시지 전송 함수
+  // 🔄 [추가된 기능] 채팅 초기화 함수
+  const handleReset = () => {
+    if (window.confirm("대화 내용을 모두 지우고 처음부터 다시 시작하시겠습니까?")) {
+      setMessages([INITIAL_MESSAGE]); // 메시지 초기화
+      setInput(""); // 입력창 비우기
+      setLoading(false); // 로딩 상태 해제
+    }
+  };
+
+  // 메시지 전송 함수
   const handleSendMessage = async (customMessage) => {
     const msgToSend = customMessage || input;
     if (!msgToSend.trim() || loading) return;
@@ -79,7 +88,7 @@ export default function AiChatButton() {
     }
   };
 
-  // 3. 마크다운 이미지 렌더러
+  // 마크다운 이미지 렌더러
   const renderContent = (text) => {
     const regex = /!\[(.*?)\]\((.*?)\)/g;
     const parts = [];
@@ -107,7 +116,7 @@ export default function AiChatButton() {
     return parts.length > 0 ? parts : text;
   };
 
-  // 🎨 [스타일 수정] 높이 제한(height) 추가로 스크롤 활성화
+  // 팝업 스타일
   const popupStyle = isNarrow
     ? {
         position: "fixed",
@@ -125,14 +134,11 @@ export default function AiChatButton() {
       }
     : {
         position: "fixed",
-        right: "120px", // 사이드바 안 가리게
-        bottom: "80px", // 버튼 위에
+        right: "120px",
+        bottom: "80px",
         width: "400px",
-        
-        // 🚀 [핵심 수정] 높이를 고정해야 넘칠 때 스크롤이 생깁니다!
         height: "600px", 
-        maxHeight: "calc(100vh - 120px)", // 화면보다 커지지 않게 제한
-        
+        maxHeight: "calc(100vh - 120px)",
         backgroundColor: "white",
         borderRadius: "16px",
         boxShadow: "0 12px 32px rgba(0,0,0,0.32)",
@@ -182,14 +188,43 @@ export default function AiChatButton() {
               flexShrink: 0,
             }}
           >
-            ALPHACAR AI 챗봇
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              style={{ border: "none", background: "none", cursor: "pointer", fontSize: "16px" }}
-            >
-              ×
-            </button>
+            <span>ALPHACAR AI 챗봇</span>
+            
+            {/* 우측 상단 버튼 그룹 */}
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {/* 🔄 초기화 버튼 */}
+              <button
+                type="button"
+                onClick={handleReset}
+                title="대화 초기화"
+                style={{
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  fontSize: "18px", // 아이콘 크기
+                  color: "#666",
+                  padding: "4px",
+                }}
+              >
+                ↺
+              </button>
+
+              {/* 닫기 버튼 */}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  color: "#333",
+                  padding: "4px",
+                }}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* 중앙: 채팅 영역 */}
@@ -197,11 +232,11 @@ export default function AiChatButton() {
             ref={scrollRef}
             style={{
               flex: 1,
-              minHeight: 0, // Flexbox 스크롤 버그 방지
+              minHeight: 0,
               padding: "16px",
               fontSize: "13px",
               color: "#333",
-              overflowY: "auto", // 🚀 내용 넘치면 스크롤바 생성
+              overflowY: "auto",
               display: "flex",
               flexDirection: "column",
               gap: "12px",
@@ -209,7 +244,7 @@ export default function AiChatButton() {
               scrollBehavior: "smooth",
             }}
           >
-            {/* 추천 질문 */}
+            {/* 추천 질문 (메시지가 초기 상태일 때만 보임) */}
             {messages.length === 1 && (
               <div style={{ marginBottom: "10px", padding: "10px", backgroundColor: "#eef6ff", borderRadius: "8px" }}>
                 <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#1e90ff" }}>💡 추천 질문</p>
