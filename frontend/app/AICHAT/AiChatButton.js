@@ -6,7 +6,7 @@ export default function AiChatButton() {
   const [open, setOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
 
-  // 초기 메시지 상수 (재사용을 위해 분리)
+  // 초기 메시지 상수
   const INITIAL_MESSAGE = {
     role: "system",
     content: "안녕하세요! ALPHACAR AI 챗봇입니다. 무엇을 도와드릴까요?",
@@ -37,12 +37,12 @@ export default function AiChatButton() {
     }
   }, [messages, loading]);
 
-  // 🔄 [추가된 기능] 채팅 초기화 함수
+  // 채팅 초기화 함수
   const handleReset = () => {
     if (window.confirm("대화 내용을 모두 지우고 처음부터 다시 시작하시겠습니까?")) {
-      setMessages([INITIAL_MESSAGE]); // 메시지 초기화
-      setInput(""); // 입력창 비우기
-      setLoading(false); // 로딩 상태 해제
+      setMessages([INITIAL_MESSAGE]); 
+      setInput(""); 
+      setLoading(false); 
     }
   };
 
@@ -88,28 +88,71 @@ export default function AiChatButton() {
     }
   };
 
-  // 마크다운 이미지 렌더러
+  // ✅ 마크다운 이미지 및 링크 렌더러 (기능 개선됨)
   const renderContent = (text) => {
-    const regex = /!\[(.*?)\]\((.*?)\)/g;
+    // 정규식 설명:
+    // 1. 링크된 이미지: [![alt](src)](href)
+    // 2. 일반 이미지: ![alt](src)
+    const regex = /\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)|!\[(.*?)\]\((.*?)\)/g;
+    
     const parts = [];
     let lastIndex = 0;
     let match;
 
     while ((match = regex.exec(text)) !== null) {
+      // 매칭된 부분 앞의 일반 텍스트 추가
       if (match.index > lastIndex) {
         parts.push(text.substring(lastIndex, match.index));
       }
-      parts.push(
-        <div key={match.index} style={{ margin: "10px 0", borderRadius: "8px", overflow: "hidden" }}>
-          <img
-            src={match[2]}
-            alt={match[1]}
-            style={{ maxWidth: "100%", height: "auto", display: "block" }}
-          />
-        </div>
-      );
+
+      // match[1], match[2], match[3] -> 링크된 이미지 (alt, src, href)
+      // match[4], match[5] -> 일반 이미지 (alt, src)
+      
+      if (match[1] && match[3]) {
+        // [CASE 1] 링크가 걸린 이미지 (클릭 시 이동)
+        parts.push(
+          <div key={match.index} style={{ margin: "10px 0", borderRadius: "8px", overflow: "hidden" }}>
+            <a 
+              href={match[3]} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ display: 'block', cursor: 'pointer', textDecoration: 'none' }}
+            >
+              <img
+                src={match[2]}
+                alt={match[1]}
+                style={{ maxWidth: "100%", height: "auto", display: "block", transition: "transform 0.2s" }}
+                onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.02)"}
+                onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
+              />
+              <div style={{ 
+                padding: "8px", 
+                backgroundColor: "#f0f8ff", 
+                color: "#1e90ff", 
+                fontSize: "12px", 
+                fontWeight: "bold", 
+                textAlign: "center" 
+              }}>
+                👆 클릭하여 상세 견적 확인하기
+              </div>
+            </a>
+          </div>
+        );
+      } else {
+        // [CASE 2] 일반 이미지 (기존 로직)
+        parts.push(
+          <div key={match.index} style={{ margin: "10px 0", borderRadius: "8px", overflow: "hidden" }}>
+            <img
+              src={match[5]}
+              alt={match[4]}
+              style={{ maxWidth: "100%", height: "auto", display: "block" }}
+            />
+          </div>
+        );
+      }
       lastIndex = regex.lastIndex;
     }
+    
     if (lastIndex < text.length) {
       parts.push(text.substring(lastIndex));
     }
@@ -190,9 +233,7 @@ export default function AiChatButton() {
           >
             <span>ALPHACAR AI 챗봇</span>
             
-            {/* 우측 상단 버튼 그룹 */}
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {/* 🔄 초기화 버튼 */}
               <button
                 type="button"
                 onClick={handleReset}
@@ -201,7 +242,7 @@ export default function AiChatButton() {
                   border: "none",
                   background: "none",
                   cursor: "pointer",
-                  fontSize: "18px", // 아이콘 크기
+                  fontSize: "18px",
                   color: "#666",
                   padding: "4px",
                 }}
@@ -209,7 +250,6 @@ export default function AiChatButton() {
                 ↺
               </button>
 
-              {/* 닫기 버튼 */}
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -244,7 +284,6 @@ export default function AiChatButton() {
               scrollBehavior: "smooth",
             }}
           >
-            {/* 추천 질문 (메시지가 초기 상태일 때만 보임) */}
             {messages.length === 1 && (
               <div style={{ marginBottom: "10px", padding: "10px", backgroundColor: "#eef6ff", borderRadius: "8px" }}>
                 <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#1e90ff" }}>💡 추천 질문</p>

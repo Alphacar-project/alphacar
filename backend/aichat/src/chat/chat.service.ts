@@ -1,9 +1,9 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { 
-  BedrockRuntimeClient, 
-  ConverseCommand, 
-  ConverseCommandInput 
+import {
+  BedrockRuntimeClient,
+  ConverseCommand,
+  ConverseCommandInput
 } from '@aws-sdk/client-bedrock-runtime';
 import { BedrockEmbeddings } from '@langchain/aws';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
@@ -23,7 +23,7 @@ export class ChatService implements OnModuleInit {
     const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID') ?? '';
     const secretAccessKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY') ?? '';
     const region = this.configService.get<string>('AWS_REGION') ?? 'us-east-1';
-    
+
     // 1. 임베딩 모델 (LangChain)
     this.embeddings = new BedrockEmbeddings({
       region: region,
@@ -77,17 +77,26 @@ export class ChatService implements OnModuleInit {
   }
 
   async chat(userMessage: string) {
-    // 1. RAG 검색 (20개)
-    const results = await this.vectorStore.similaritySearch(userMessage, 20);
+    // 1. RAG 검색 (7개)
+    // [수정] const -> let으로 변경하여 정렬 결과 재할당 가능하게 함
+    let results = await this.vectorStore.similaritySearch(userMessage, 10);
+
+    // [수정 포인트] 검색 결과 재정렬 로직 추가
+    // 목적: "프리미엄" 검색 시 "프리미엄 2WD" 같은 하위/긴 이름보다 기본 이름을 우선순위로 둠
+    results = results.sort((a, b) => {
+        // 텍스트 길이(length)가 짧은 순서대로 정렬 (짧을수록 상위/기본 개념일 확률 높음)
+        return a.pageContent.length - b.pageContent.length;
+    });
+
     const context = results.map((r) => r.pageContent).join('\n\n');
     const sources = results.map((r) => r.metadata.source);
 
     console.log(`🔎 Context Length: ${context.length} characters`);
 
-    // 2. 시스템 프롬프트 (대화 유도 기능 추가)
+    // 2. 시스템 프롬프트 (대화 유도 + 스마트 링크 + URL 텍스트 출력 금지)
     const systemPrompt = `
     You are the AI Automotive Specialist for 'AlphaCar'.
-    
+
     [CORE RULES - STRICT COMPLIANCE]
     1. **LANGUAGE**: Answer strictly in **Korean (Hangul)**. No Hanja.
     2. **GROUNDING**: Answer SOLELY based on the provided [Context].
@@ -95,7 +104,7 @@ export class ChatService implements OnModuleInit {
 
     [CONVERSATION FLOW - KEEP IT ALIVE]
     **Do NOT just answer and stop.** Always end your response with a **Follow-up Question** to guide the user.
-    
+
     - **If you recommended cars**: "이 중에서 마음에 드는 모델이 있으신가요? 아니면 다른 조건(예: 연비, 디자인)으로 더 찾아볼까요?"
     - **If you gave a price**: "생각하신 예산 범위에 맞으신가요? 할부 견적이나 옵션 정보도 알려드릴까요?"
     - **If info is missing**: "더 정확한 추천을 위해 선호하시는 브랜드나 연료 타입(전기/가솔린)을 알려주시겠어요?"
@@ -107,17 +116,36 @@ export class ChatService implements OnModuleInit {
 
     [SMART FILTERING LOGIC]
     1. **Price Flexibility**: Allow ±10% margin.
-    2. **Type Filtering**: 
+    2. **Type Filtering**:
        - "Sedan" -> Sedan/Coupe/Hatchback.
        - "SUV" -> SUV/RV.
     3. **Scenarios**:
        - "Camping": SUV, Van.
        - "Commute/First Car": Compact Sedan, Hybrid, Light Car.
 
-    [IMAGE RENDERING]
+    [IMAGE RENDERING & LINKING LOGIC]
     - MUST display images if 'ImageURL' exists in context.
-    - Format: ![Car Name](URL)
-    - Keep URL exactly as is.
+    - **CRITICAL**: You MUST wrap the image in a link to the quote page.
+
+    - **⛔ STRICT RULE (NO RAW URLs)**:
+      - Do NOT write the raw Image URL (http://...) as plain text in the response.
+      - ONLY output the URL inside the Markdown link syntax.
+      - (Bad Example): "여기 이미지입니다: https://example.com/car.jpg [![Car](...)]..."
+      - (Good Example): "여기 이미지입니다: [![Car](...)]..."
+
+    - **ID Selection Rules (Smart Linking)**:
+      1. Check the **[트림별 상세 정보 (ID 포함)]** section in the context.
+      2. **IF** the user mentioned a specific trim name (e.g., "Prestige", "Exclusive", "Noblesse"):
+         - Find the ID associated with that trim name in the list.
+         - Use that specific ID.
+      3. **IF** the user did NOT specify a trim (General inquiry):
+         - Use the ID of the **first (lowest price)** trim in the list.
+         - Or use 'BaseTrimId' if available.
+
+    - **Link Format**:
+      [![Car Name](ImageURL)](/quote/personal/result?trimId={Selected_TrimId})
+
+    - Keep 'ImageURL' exactly as provided in the context. Do not modify the image url.
 
     [Context]
     ${context}
