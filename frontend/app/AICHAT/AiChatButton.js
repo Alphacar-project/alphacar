@@ -1,26 +1,115 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function AiChatButton() {
   const [open, setOpen] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
 
+  // 1. 채팅 관련 상태
+  const [messages, setMessages] = useState([
+    {
+      role: "system",
+      content: "안녕하세요! ALPHACAR AI 챗봇입니다. 무엇을 도와드릴까요?",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef(null);
+
   // 창 크기에 따라 반응형 처리
   useEffect(() => {
     function handleResize() {
-      setIsNarrow(window.innerWidth < 1100); // 1100px 보다 작으면 "좁은 화면" 취급
+      setIsNarrow(window.innerWidth < 1100);
     }
-
-    handleResize(); // 처음 한 번 실행
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // 팝업 스타일(넓은 화면 / 좁은 화면 분기)
+  // 스크롤 자동 이동
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages, loading]);
+
+  // 2. 메시지 전송 함수
+  const handleSendMessage = async (customMessage) => {
+    const msgToSend = customMessage || input;
+    if (!msgToSend.trim() || loading) return;
+
+    const userMsg = { role: "user", content: msgToSend };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/chat/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg.content }),
+      });
+
+      if (!res.ok) throw new Error("Network error");
+      const data = await res.json();
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: data.response },
+      ]);
+    } catch (error) {
+      console.error("Chat Error:", error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "system", content: "죄송합니다. 서버 연결에 실패했습니다." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // 3. 마크다운 이미지 렌더러
+  const renderContent = (text) => {
+    const regex = /!\[(.*?)\]\((.*?)\)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      parts.push(
+        <div key={match.index} style={{ margin: "10px 0", borderRadius: "8px", overflow: "hidden" }}>
+          <img
+            src={match[2]}
+            alt={match[1]}
+            style={{ maxWidth: "100%", height: "auto", display: "block" }}
+          />
+        </div>
+      );
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    return parts.length > 0 ? parts : text;
+  };
+
+  // 🎨 [스타일 수정] 높이 제한(height) 추가로 스크롤 활성화
   const popupStyle = isNarrow
     ? {
-        // 🔹 화면이 좁을 때 : 좌우 꽉 차게
         position: "fixed",
         left: "16px",
         right: "16px",
@@ -35,12 +124,15 @@ export default function AiChatButton() {
         zIndex: 60,
       }
     : {
-        // 🔹 화면이 넓을 때 : 오른쪽에 640px 고정
         position: "fixed",
-        right: "24px",
-        top: "72px",
-        bottom: "24px",
-        width: "1860px",
+        right: "120px", // 사이드바 안 가리게
+        bottom: "80px", // 버튼 위에
+        width: "400px",
+        
+        // 🚀 [핵심 수정] 높이를 고정해야 넘칠 때 스크롤이 생깁니다!
+        height: "600px", 
+        maxHeight: "calc(100vh - 120px)", // 화면보다 커지지 않게 제한
+        
         backgroundColor: "white",
         borderRadius: "16px",
         boxShadow: "0 12px 32px rgba(0,0,0,0.32)",
@@ -49,49 +141,32 @@ export default function AiChatButton() {
         zIndex: 60,
       };
 
-  // 플로팅 버튼 위치 (좁을 때는 조금 안쪽으로)
-  const floatButtonStyle = isNarrow
-    ? {
-        position: "fixed",
-        right: "16px",
-        bottom: "16px",
-        borderRadius: "999px",
-        padding: "10px 18px",
-        backgroundColor: "#1e90ff",
-        color: "white",
-        border: "none",
-        boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-        cursor: "pointer",
-        fontSize: "14px",
-        zIndex: 50,
-      }
-    : {
-        position: "fixed",
-        right: "24px",
-        bottom: "24px",
-        borderRadius: "999px",
-        padding: "10px 18px",
-        backgroundColor: "#1e90ff",
-        color: "white",
-        border: "none",
-        boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-        cursor: "pointer",
-        fontSize: "14px",
-        zIndex: 50,
-      };
+  const floatButtonStyle = {
+    position: "fixed",
+    right: isNarrow ? "16px" : "120px",
+    bottom: "24px",
+    borderRadius: "999px",
+    padding: "10px 24px",
+    backgroundColor: "#1e90ff",
+    color: "white",
+    border: "none",
+    boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "bold",
+    zIndex: 50,
+  };
 
   return (
     <>
-      {/* 오른쪽 하단 플로팅 버튼 */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen(!open)}
         style={floatButtonStyle}
       >
-        AI 챗봇
+        {open ? "닫기" : "AI 챗봇 상담"}
       </button>
 
-      {/* 큰 팝업 창 */}
       {open && (
         <div style={popupStyle}>
           {/* 상단 바 */}
@@ -104,182 +179,142 @@ export default function AiChatButton() {
               alignItems: "center",
               fontSize: "13px",
               fontWeight: "bold",
+              flexShrink: 0,
             }}
           >
             ALPHACAR AI 챗봇
             <button
               type="button"
               onClick={() => setOpen(false)}
-              style={{
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                fontSize: "16px",
-                lineHeight: 1,
-              }}
+              style={{ border: "none", background: "none", cursor: "pointer", fontSize: "16px" }}
             >
               ×
             </button>
           </div>
 
-          {/* 상단: 차량 비교 영역 */}
+          {/* 중앙: 채팅 영역 */}
           <div
-            style={{
-              padding: "12px 16px",
-              borderBottom: "1px solid #f2f2f2",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "13px",
-                fontWeight: "bold",
-                marginBottom: "8px",
-              }}
-            >
-              AI 추천 차량 비교
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: isNarrow ? "column" : "row", // 좁을 때는 위/아래로 쌓기
-                gap: "12px",
-              }}
-            >
-              {/* 차량 카드 1 */}
-              <div
-                style={{
-                  flex: 1,
-                  borderRadius: "12px",
-                  border: "1px solid #eee",
-                  padding: "10px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    height: "120px",
-                    borderRadius: "8px",
-                    background:
-                      "linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "13px",
-                    color: "white",
-                    fontWeight: "bold",
-                  }}
-                >
-                  차량 이미지 1
-                </div>
-                <div style={{ fontSize: "12px", color: "#333" }}>
-                  <b>차량 A</b> (예: 트렉스 RS)
-                  <br />
-                  대략 가격 / 연비 / 타입 정보가 들어갈 수 있어요.
-                </div>
-              </div>
-
-              {/* 차량 카드 2 */}
-              <div
-                style={{
-                  flex: 1,
-                  borderRadius: "12px",
-                  border: "1px solid #eee",
-                  padding: "10px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    height: "120px",
-                    borderRadius: "8px",
-                    background:
-                      "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "13px",
-                    color: "white",
-                    fontWeight: "bold",
-                  }}
-                >
-                  차량 이미지 2
-                </div>
-                <div style={{ fontSize: "12px", color: "#333" }}>
-                  <b>차량 B</b> (예: 쏘렌토 하이브리드)
-                  <br />
-                  나중에 AI가 추천해 준 차량 정보가 들어갈 수 있어요.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 중앙: 설명/가이드 + 채팅영역 */}
-          <div
+            ref={scrollRef}
             style={{
               flex: 1,
-              padding: "10px 16px",
-              fontSize: "12px",
-              color: "#555",
-              overflowY: "auto",
+              minHeight: 0, // Flexbox 스크롤 버그 방지
+              padding: "16px",
+              fontSize: "13px",
+              color: "#333",
+              overflowY: "auto", // 🚀 내용 넘치면 스크롤바 생성
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              backgroundColor: "#f9f9f9",
+              scrollBehavior: "smooth",
             }}
           >
-            <p style={{ marginBottom: "6px" }}>
-              안녕하세요! ALPHACAR AI 챗봇입니다.
-            </p>
-            <p style={{ marginBottom: "6px" }}>
-              현재는 <b>UI 데모</b> 상태이고, 나중에 실제 AI와 연동해서
-              <br />
-              위의 차량 카드에 <b>추천 차량 2개를 자동으로 채워 넣을 수</b>
-              있어요.
-            </p>
+            {/* 추천 질문 */}
+            {messages.length === 1 && (
+              <div style={{ marginBottom: "10px", padding: "10px", backgroundColor: "#eef6ff", borderRadius: "8px" }}>
+                <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#1e90ff" }}>💡 추천 질문</p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, cursor: "pointer" }}>
+                  {[
+                    "3천만 원대 사회초년생 첫 차 추천해줘",
+                    "쏘나타랑 K5 가격이랑 옵션 비교해줘",
+                    "4인 가족이 탈 만한 차박용 SUV 추천해줘",
+                    "연비 좋은 하이브리드 차량 뭐 있어?",
+                    "제네시스 G80 사진이랑 견적 보여줘"
+                  ].map((text, i) => (
+                    <li 
+                      key={i} 
+                      onClick={() => handleSendMessage(text)}
+                      style={{ 
+                        padding: "6px 10px", 
+                        marginBottom: "6px", 
+                        backgroundColor: "white", 
+                        borderRadius: "20px", 
+                        border: "1px solid #ddd",
+                        fontSize: "12px",
+                        color: "#555",
+                        display: "inline-block", 
+                        marginRight: "6px"
+                      }}
+                    >
+                      {text}
+                    </li>
+                  ))}
+                </ul>
+                <p style={{ marginTop: "12px", fontSize: "11px", color: "#888" }}>
+                  ⚠️ 금융, 정치, 날씨 등 자동차와 무관한 질문은 답변하지 않습니다.
+                </p>
+              </div>
+            )}
 
-            <p style={{ marginTop: "10px", marginBottom: "4px" }}>
-              예시로 이런 질문을 할 수 있어요:
-            </p>
-            <ul style={{ paddingLeft: "18px", marginBottom: "8px" }}>
-              <li>“예산 3천만 원대, 패밀리 SUV 추천해줘”</li>
-              <li>“트렉스랑 셀토스 중에 유지비 비교해줘”</li>
-              <li>“서울 출퇴근용 전기차 추천해줘”</li>
-            </ul>
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  backgroundColor: msg.role === "user" ? "#1e90ff" : "white",
+                  color: msg.role === "user" ? "white" : "black",
+                  border: msg.role === "user" ? "none" : "1px solid #eee",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                  whiteSpace: "pre-wrap",
+                  lineHeight: "1.5",
+                }}
+              >
+                {renderContent(msg.content)}
+              </div>
+            ))}
+            {loading && (
+              <div style={{ alignSelf: "flex-start", color: "#888", fontSize: "12px", marginLeft: "8px" }}>
+                답변 생성 중... 🚗
+              </div>
+            )}
           </div>
 
-          {/* 하단: 입력박스 & 전송 버튼 */}
+          {/* 하단: 입력박스 */}
           <div
             style={{
-              padding: "8px 12px 10px",
+              padding: "12px",
               borderTop: "1px solid #eee",
               display: "flex",
-              gap: "6px",
+              gap: "8px",
               alignItems: "center",
+              backgroundColor: "white",
+              borderRadius: "0 0 16px 16px",
+              flexShrink: 0,
             }}
           >
             <input
               type="text"
-              placeholder="차량 추천이나 가격 비교를 물어보세요. (데모)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="궁금한 차량 정보를 물어보세요..."
+              disabled={loading}
               style={{
                 flex: 1,
                 borderRadius: "20px",
                 border: "1px solid #ddd",
-                padding: "8px 12px",
-                fontSize: "12px",
+                padding: "10px 14px",
+                fontSize: "13px",
+                outline: "none",
               }}
             />
             <button
               type="button"
+              onClick={() => handleSendMessage()}
+              disabled={loading}
               style={{
                 borderRadius: "20px",
                 border: "none",
-                backgroundColor: "#1e90ff",
+                backgroundColor: loading ? "#ccc" : "#1e90ff",
                 color: "white",
-                fontSize: "12px",
-                padding: "8px 12px",
-                cursor: "pointer",
+                fontSize: "13px",
+                padding: "10px 18px",
+                cursor: loading ? "not-allowed" : "pointer",
+                fontWeight: "bold",
               }}
-              onClick={() => alert("AI 연동은 추후 구현 예정입니다.")}
             >
               전송
             </button>
@@ -289,4 +324,3 @@ export default function AiChatButton() {
     </>
   );
 }
-
