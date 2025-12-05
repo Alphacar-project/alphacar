@@ -4,7 +4,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://192.168.0.160:3003/quote";
+const API_BASE = "/api";
 
 export default function QuoteResultPage() {
   const searchParams = useSearchParams();
@@ -107,7 +107,7 @@ export default function QuoteResultPage() {
     try {
       setIsSaving(true);
 
-      const res = await fetch("http://192.168.0.160:3003/estimate", {
+      const res = await fetch(`${API_BASE}/estimate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -1,8 +1,11 @@
-import { Controller, Get, Query, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, HttpStatus, Logger } from '@nestjs/common';
 import { AppService } from './app.service';
 
+// [중요] @Controller('quote') 이므로 실제 주소는 /quote/trims 가 됩니다.
 @Controller('quote')
 export class AppController {
+  private readonly logger = new Logger(AppController.name);
+
   constructor(private readonly appService: AppService) {}
 
   // 1. 제조사 목록 조회
@@ -17,9 +20,13 @@ export class AppController {
     return this.appService.getModelsByManufacturer(makerId);
   }
 
-  // 3. 트림 목록 조회
+  // 3. 트림 목록 조회 (🚨 여기가 에러 발생 지점)
   @Get('trims')
   getTrims(@Query('modelId') modelId: string) {
+    // [수정] modelId가 비어있으면 DB에 가지 않고 빈 배열([])을 줘서 500 에러를 막습니다.
+    if (!modelId || modelId === 'undefined') {
+      return []; 
+    }
     return this.appService.getTrimsByModel(modelId);
   }
 
@@ -29,21 +36,18 @@ export class AppController {
     return this.appService.getTrimDetail(trimId);
   }
 
-  // 5. [기존] 비교 데이터 조회 API (단순 트림 ID 목록 조회용)
+  // 5. 비교 데이터 조회 API
   @Get('compare-data')
   getCompareData(@Query('ids') ids: string) {
     return this.appService.getCompareData(ids);
   }
 
-  // 6. ⭐ [신규 추가] 비교 견적 상세 정보 조회 API
-  // 프론트엔드 비교견적 페이지에서 trimId와 options를 받아 상세 정보를 반환합니다.
-  // 요청 예시: GET /quote/compare-details?trimId=...&options=opt1,opt2
+  // 6. 비교 견적 상세 정보 조회 API
   @Get('compare-details')
   async getCompareDetails(
     @Query('trimId') trimId: string,
     @Query('options') optionsString: string,
   ) {
-    // 유효성 검사
     if (!trimId) {
       return {
         statusCode: HttpStatus.BAD_REQUEST,
@@ -51,12 +55,10 @@ export class AppController {
       };
     }
 
-    // 콤마로 구분된 옵션 ID 문자열을 배열로 변환
     const optionIds = optionsString
       ? optionsString.split(',').filter((id) => id.trim() !== '')
       : [];
 
-    // Service의 getCompareDetails 메서드 호출 (이전 단계에서 Service에 추가함)
     return await this.appService.getCompareDetails(trimId, optionIds);
   }
 }

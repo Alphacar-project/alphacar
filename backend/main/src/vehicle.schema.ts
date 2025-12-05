@@ -6,7 +6,10 @@ import { Manufacturer } from './manufacturer.schema';
 export type VehicleDocument = HydratedDocument<Vehicle>;
 
 // 'vehicles' 컬렉션에 연결
-@Schema({ collection: 'vehicles' })
+@Schema({ 
+    collection: 'vehicles' 
+    // 👈 [제거] toJSON 옵션은 아래에서 VehicleSchema에 직접 적용합니다.
+})
 export class Vehicle extends Document {
   // 차량 이름 (DB: model_name)
   @Prop({ required: true })
@@ -26,3 +29,13 @@ export class Vehicle extends Document {
 }
 
 export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
+
+// 👈 [추가] TS 오류를 해결하고 ObjectId를 id로 변환하는 로직을 스키마에 직접 적용
+VehicleSchema.set('toJSON', {
+  virtuals: true,
+  versionKey: false,
+  transform: (doc: any, ret: any) => { // doc, ret 타입을 any로 캐스팅하여 TS2339, TS2790 해결
+    ret.id = ret._id.toString();
+    delete ret._id;
+  },
+});

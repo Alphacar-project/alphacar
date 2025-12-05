@@ -2,15 +2,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation"; // 페이지 이동을 위해 필요
+import { useRouter } from "next/navigation";
 
-// 백엔드 주소 (포트 3003 또는 4000 등 설정하신 포트 사용)
-const API_BASE = "http://192.168.0.160:3003/quote";
+// [수정] 프록시 경로 사용 (http://... 지움)
+// next.config.mjs 설정에 따라 /api/makers, /api/models, /api/trims 로 연결됩니다.
+const API_BASE = "/api";
 
 export default function PersonalQuotePage() {
   const router = useRouter();
 
-  // 선택된 데이터 (ID와 이름 모두 저장)
+  // 선택된 데이터
   const [selectedMaker, setSelectedMaker] = useState(null); // { _id, name }
   const [selectedModel, setSelectedModel] = useState(null); // { _id, model_name }
   const [selectedTrim, setSelectedTrim] = useState(null);   // { _id, name, price }
@@ -24,8 +25,19 @@ export default function PersonalQuotePage() {
   useEffect(() => {
     fetch(`${API_BASE}/makers`)
       .then((res) => res.json())
-      .then((data) => setMakers(data))
-      .catch((err) => console.error("제조사 로딩 실패:", err));
+      .then((data) => {
+        // [안전장치] 배열인지 확인
+        if (Array.isArray(data)) {
+          setMakers(data);
+        } else {
+          console.error("제조사 데이터 오류:", data);
+          setMakers([]);
+        }
+      })
+      .catch((err) => {
+        console.error("제조사 로딩 실패:", err);
+        setMakers([]);
+      });
   }, []);
 
   // 2. 제조사 선택 시 -> 모델 목록 가져오기
@@ -36,9 +48,25 @@ export default function PersonalQuotePage() {
     setModels([]);
     setTrims([]);
 
+    // [수정] 프록시 경로 사용 & 안전장치 추가
     fetch(`${API_BASE}/models?makerId=${maker._id}`)
       .then((res) => res.json())
-      .then((data) => setModels(data));
+      .then((data) => {
+        if (Array.isArray(data)) {
+          // [추가] 모델명 중복 제거 (Unique Key 에러 방지 및 깔끔한 UI)
+          const uniqueModels = Array.from(
+            new Map(data.map((m) => [m.model_name, m])).values()
+          );
+          setModels(uniqueModels);
+        } else {
+          console.error("모델 데이터 오류(배열 아님):", data);
+          setModels([]);
+        }
+      })
+      .catch((err) => {
+        console.error("모델 로딩 실패:", err);
+        setModels([]);
+      });
   };
 
   // 3. 모델 선택 시 -> 트림 목록 가져오기
@@ -47,9 +75,21 @@ export default function PersonalQuotePage() {
     setSelectedTrim(null);
     setTrims([]);
 
+    // [수정] 프록시 경로 사용 & 안전장치 추가
     fetch(`${API_BASE}/trims?modelId=${model._id}`)
       .then((res) => res.json())
-      .then((data) => setTrims(data));
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTrims(data);
+        } else {
+          console.error("트림 데이터 오류(배열 아님):", data);
+          setTrims([]);
+        }
+      })
+      .catch((err) => {
+        console.error("트림 로딩 실패:", err);
+        setTrims([]);
+      });
   };
 
   // 4. 트림 선택
@@ -74,7 +114,7 @@ export default function PersonalQuotePage() {
     setTrims([]);
   };
 
-  // 스타일
+  // 스타일 (기존 유지)
   const columnBoxStyle = {
     background: "#ffffff",
     border: "1px solid #ddd",
@@ -129,7 +169,7 @@ export default function PersonalQuotePage() {
           ← 뒤로 가기
         </button>
 
-        {/* 🔵 개별견적 상단 설명 카드 (비교견적 페이지와 스타일 맞춤) */}
+        {/* 🔵 개별견적 상단 설명 카드 */}
         <div
           style={{
             backgroundColor: "#fff",
@@ -176,7 +216,7 @@ export default function PersonalQuotePage() {
           </div>
         </div>
 
-        {/* 🚗 차량 상세 견적 메인 카드 (기존 내용 그대로) */}
+        {/* 🚗 차량 상세 견적 메인 카드 */}
         <section
           style={{
             background: "#ffffff",
@@ -336,4 +376,3 @@ export default function PersonalQuotePage() {
     </main>
   );
 }
-

@@ -1,0 +1,61 @@
+import { Controller, Get, Post, Param, Body, Query } from '@nestjs/common';
+import { VehicleService } from './vehicle.service';
+
+@Controller('vehicles')
+export class VehicleController {
+  constructor(private readonly vehicleService: VehicleService) {}
+
+  // ==================================================================
+  // [순서 중요] 동적 경로(:id)보다 구체적인 경로(history/...)가 위에 와야 함
+  // ==================================================================
+
+  // 1. [GET] 빨간 원(Badge) 개수 조회
+  // 요청: GET /vehicles/history/count?userId=user_abc123
+  @Get('history/count')
+  async getCount(@Query('userId') userId: string) {
+    // 유저 ID가 없으면 guest로 처리
+    const finalUserId = userId || 'guest_user';
+    
+    const count = await this.vehicleService.getRecentCount(finalUserId);
+    return { count };
+  }
+
+  // 2. [GET] 최근 본 차량 목록 조회
+  // 요청: GET /vehicles/history/recent?userId=user_abc123
+  @Get('history/recent')
+  async getRecentViews(@Query('userId') userId: string) {
+    const finalUserId = userId || 'guest_user';
+    return await this.vehicleService.getRecentVehicles(finalUserId);
+  }
+
+  // 3. [POST] "나 이 차 봤어!" 저장 요청
+  // 요청: POST /vehicles/{차량ID}/view  (Body: { userId: "user_abc123" })
+  @Post(':id/view')
+  async recordView(
+    @Param('id') vehicleId: string, 
+    @Body('userId') userId: string // ★ Body에서 userId를 꺼냄
+  ) {
+    const finalUserId = userId || 'guest_user';
+
+    console.log(`📡 [요청 도착] 차량 클릭됨! ID: ${vehicleId}`);
+    console.log(`👤 [유저 확인] 저장할 유저명: ${finalUserId}`);
+
+    return await this.vehicleService.addRecentView(finalUserId, vehicleId);
+  }
+
+  // ==================================================================
+  // [기존] 범용 경로
+  // ==================================================================
+
+  // 4. [GET] 전체 조회
+  @Get()
+  async findAll() {
+    return this.vehicleService.findAll();
+  }
+
+  // 5. [GET] 상세 조회
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.vehicleService.findOne(id);
+  }
+}

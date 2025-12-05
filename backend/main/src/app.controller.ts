@@ -1,39 +1,87 @@
-// alphacar-project/alphacar/alphacar-0f6f51352a76b0977fcac48535606711be26d728/backend/main/src/app.controller.ts
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { AppService } from './app.service';
+import { RedisService } from './redis/redis.service';
 
-@Controller('main')
+@Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly redisService: RedisService,
+  ) {}
 
+  // 1. 기본 루트 (Health Check용) - 단순 헬스 체크
   @Get()
-  async getMainData() {
-    // 1. 서비스에서 차량 목록을 먼저 가져옵니다.
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  // 2. 메인 페이지 데이터 (GET /main)
+  // ★ [수정] 프론트엔드가 /api/main을 호출하면 이 함수가 실행됩니다.
+  // 기존 @Get()에 있던 '배너 + 최근 본 차량 + 차량 목록' 로직을 여기로 합쳤습니다.
+  @Get('main')
+  async getMainData(@Query('userId') userId: string = 'guest_id') {
+    // (1) 서비스에서 차량 목록 가져오기
     const carList = await this.appService.getCarList();
 
-    // 2. 기존 데이터에 'cars' 필드를 추가하여 함께 반환합니다.
+    // (2) Redis에서 최근 본 차량 ID 목록 가져오기
+    const recentViewIds = await this.redisService.getRecentViews(userId);
+
+    // (3) 종합 데이터 반환 (프론트엔드 MainData 타입과 일치)
     return {
       welcomeMessage: 'Welcome to AlphaCar Home',
-      
       searchBar: {
         isShow: true,
-        placeholder: '찾는 차량을 검색해 주세요' 
+        placeholder: '찾는 차량을 검색해 주세요'
       },
-
       banners: [
         { id: 1, text: '11월의 핫딜: 아반떼 즉시 출고', color: '#ff5555' },
         { id: 2, text: '겨울철 타이어 교체 가이드', color: '#5555ff' }
       ],
       shortcuts: ['견적내기', '시승신청', '이벤트'],
+      
+      // 차량 목록
+      cars: carList,
 
-      // 👈 [핵심 수정] 프론트엔드가 기다리는 'cars' 데이터를 여기에 넣어줍니다.
-      cars: carList 
+      // 최근 본 차량 ID 목록
+      recentViews: recentViewIds
     };
   }
 
-  // (참고) 이 엔드포인트는 테스트용으로 남겨두셔도 됩니다.
+  // 3. 차량 목록만 별도로 조회 (GET /cars)
   @Get('cars')
   async getCarList() {
     return await this.appService.getCarList();
   }
+
+  // 4. 최근 본 차량 기록 (POST /log-view/:id)
+  @Post('log-view/:id')
+  async logView(
+    @Param('id') vehicleId: string,
+    @Body('userId') userId: string
+  ) {
+    if (!userId) {
+      return { success: false, message: 'User ID is required' };
+    }
+
+    // Redis에 기록
+    await this.redisService.addRecentView(userId, vehicleId);
+    return { success: true, message: 'Recent view logged successfully' };
+  }
+
+  // 5. 제조사 목록 조회 (GET /makers)
+  @Get('makers')
+  async getMakers() {
+    return this.appService.findAllMakers();
+  }
+
+  @Get('models')
+  async getModels(@Query('makerId') makerId: string) {
+    return this.appService.getModelsByMaker(makerId);
+  }
+
+  @Get('trims')
+  async getTrims(@Query('modelId') modelId: string) {
+    return this.appService.getTrims(modelId);
+  }
+
 }

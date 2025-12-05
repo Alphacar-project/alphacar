@@ -1,3 +1,18 @@
+/* ===========================
+   ALPHACAR 기본 스타일
+   - 배경: 화이트
+   - 포인트: 블루 (#0066ff)
+=========================== */
+
+/* 공통 컬러 변수 */
+:root {
+  --color-bg: #ffffff;        /* 전체 배경 */
+  --color-primary: #0066ff;   /* 메인 포인트 블루 */
+  --color-text: #222222;      /* 기본 글자색 */
+  --color-border: #e2e2e2;    /* 기본 보더 */
+  --color-muted: #666666;     /* 보조 텍스트 */
+}
+
 /* 리셋 + 기본 */
 * {
   box-sizing: border-box;
@@ -8,8 +23,8 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", system-ui,
     sans-serif;
-  background-color: #f7f7f7;
-  color: #222;
+  background-color: var(--color-bg); /* ✅ 회색 → 완전 흰색 */
+  color: var(--color-text);
 }
 
 a {
@@ -43,7 +58,7 @@ a {
   border-radius: 999px;
   border: 1px solid #ddd;
   font-size: 14px;
-  background-color: white;
+  background-color: #ffffff;
   cursor: pointer;
 }
 
@@ -58,20 +73,18 @@ a {
 .nav-item {
   padding: 8px 14px;
   border-radius: 999px;
-  background-color: white;
+  background-color: #ffffff;
   border: 1px solid #e2e2e2;
   font-size: 14px;
 }
 
-/* 배너 영역 */
 /* ===== 배너 영역 ===== */
 
 .banner-section {
   max-width: 1200px;
   margin: 40px auto 0;
   padding: 0 20px;
-  /* ⭐⭐ 추가: 배너 점의 absolute 기준이 됩니다. ⭐⭐ */
-  position: relative;
+  position: relative; /* 배너 점 위치 기준 */
 }
 
 .banner-slide {
@@ -116,22 +129,17 @@ a {
   font-size: 14px;
 }
 
-/* ----------------------------------------------------
-   ✅ 2차 정의 수정 (기존 139줄 부근) - UI 가시성 개선 반영
----------------------------------------------------- */
 /* 배너 하단 점 ●●● */
 .banner-dots {
   position: absolute; /* 배너 안에 고정 */
-  bottom: 12px; /* 하단에서 띄우기 */
+  bottom: 12px;
   left: 50%;
-  transform: translateX(-50%); /* 중앙 정렬 */
+  transform: translateX(-50%);
   display: flex;
   gap: 8px;
-
-  /* 🚨 수정: UI 가시성 개선 */
-  background: rgba(0, 0, 0, 0.4); /* 배경색을 추가하여 배너 위에 놓았을 때 잘 보이게 함 */
-  border-radius: 10px; /* 배경 모서리 둥글게 */
-  padding: 4px 8px; /* 배경 패딩 추가 */
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
+  padding: 4px 8px;
 }
 
 .dot {
@@ -139,25 +147,18 @@ a {
   height: 8px;
   border-radius: 999px;
   border: none;
-  /* 🚨 수정: 점 색상을 흰색으로 변경 */
   background-color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   padding: 0;
-  /* 🚨 수정: 전환 효과 추가 */
   transition: all 0.2s ease;
 }
 
 .dot.active {
   width: 18px;
-  /* 🚨 수정: 활성 점을 불투명 흰색으로 */
   background-color: #ffffff;
-  /* 🚨 수정: 길게 보이도록 사각형에 가까운 형태로 */
   border-radius: 4px;
-  /* 🚨 수정: 확대 효과 제거 */
   transform: none;
 }
-/* ---------------------------------------------------- */
-
 
 /* 검색 영역 */
 .search-section {
@@ -177,7 +178,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
+  background-color: #ffffff;
   border-radius: 999px;
   padding: 10px 16px;
   border: 1px solid #ddd;
@@ -199,8 +200,8 @@ a {
   padding: 10px 26px;
   border-radius: 999px;
   border: none;
-  background-color: #0066ff;
-  color: #fff;
+  background-color: var(--color-primary); /* ✅ 메인 블루 */
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -226,7 +227,7 @@ a {
   gap: 24px;
   padding: 16px;
   border-radius: 16px;
-  background-color: white;
+  background-color: #ffffff;
 }
 
 .topcar-image-wrap {
@@ -241,7 +242,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--color-muted);
   font-size: 14px;
 }
 
@@ -259,7 +260,7 @@ a {
 
 .topcar-sub {
   font-size: 13px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 /* 브랜드 + 차량 리스트 */
@@ -267,29 +268,30 @@ a {
   margin-top: 32px;
 }
 
-/* ✅ 브랜드 버튼 9개씩 3줄로 정렬 */
+/* 브랜드 버튼 9개씩 3줄로 정렬 */
 .brand-tabs {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr)); /* 한 줄에 9개 */
+  grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
 }
 
 .brand-btn {
-  width: 100%;              /* 그리드 셀 전체 채우기 */
+  width: 100%;
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid #ddd;
-  background-color: white;
+  border: 1px solid var(--color-border);
+  background-color: #ffffff;
   font-size: 13px;
   cursor: pointer;
   text-align: center;
 }
 
+/* ✅ 브랜드 선택 상태도 블루 톤으로 통일 */
 .brand-btn-active {
-  border-color: #1abae0;
-  background-color: #e6f7fb;
-  color: #007a9b;
+  border-color: var(--color-primary);
+  background-color: #e8f1ff;
+  color: var(--color-primary);
 }
 
 .car-list {
@@ -299,7 +301,7 @@ a {
 }
 
 .car-card {
-  background-color: white;
+  background-color: #ffffff;
   border-radius: 14px;
   padding: 12px;
   border: 1px solid #eee;
@@ -317,7 +319,7 @@ a {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .car-info {
@@ -333,7 +335,7 @@ a {
 
 .car-price {
   font-size: 13px;
-  color: #555;
+  color: var(--color-primary); /* ✅ 가격 포인트 컬러 */
 }
 
 .car-detail-btn {
@@ -343,8 +345,8 @@ a {
   border-radius: 999px;
   border: none;
   font-size: 12px;
-  background-color: #1abae0;
-  color: white;
+  background-color: var(--color-primary); /* ✅ 블루 버튼 */
+  color: #ffffff;
   cursor: pointer;
 }
 
@@ -368,7 +370,7 @@ a {
 .result-keyword {
   margin-left: 6px;
   font-size: 20px;
-  color: #0066ff;
+  color: var(--color-primary); /* ✅ 검색 키워드 블루 */
 }
 
 .result-sub {
@@ -403,7 +405,7 @@ a {
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #666;
+  color: var(--color-muted);
 }
 
 .car-name-brand {
@@ -450,11 +452,6 @@ a {
   color: #999;
 }
 
-.car-price {
-  font-weight: 700;
-  color: #0066ff;
-}
-
 .car-price-sub {
   color: #333;
 }
@@ -464,8 +461,8 @@ a {
   padding: 8px 16px;
   border-radius: 999px;
   border: none;
-  background-color: #0066ff;
-  color: #fff;
+  background-color: var(--color-primary); /* ✅ 블루 버튼 */
+  color: #ffffff;
   font-size: 13px;
   cursor: pointer;
 }
@@ -519,21 +516,21 @@ a {
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid #d0d7de;
-  background-color: #fff;
+  background-color: #ffffff;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .page-btn:hover {
-  border-color: #0070f3;
-  color: #0070f3;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .page-btn-active {
-  background-color: #0070f3;
-  border-color: #0070f3;
-  color: #fff;
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
   font-weight: 600;
 }
 

@@ -30,6 +30,12 @@ export class AppService {
 
   // 3. 트림 목록
   async getTrimsByModel(vehicleId: string) {
+    // [추가된 방어 코드]
+    // 값이 비어있거나, MongoDB의 ID 형식이 아닌 이상한 값이면 DB 조회를 하지 않고 빈 배열 반환
+    if (!vehicleId || !Types.ObjectId.isValid(vehicleId)) {
+      return [];
+    }
+
     return this.trimModel
       .find({ vehicle_id: new Types.ObjectId(vehicleId) }, { name: 1, base_price: 1, _id: 1 })
       .lean()

@@ -25,7 +25,7 @@ function SearchContent() {
 
     // [수정] 백엔드 포트 및 엔드포인트 수정 (3007 포트, /search 경로)
     // 환경변수가 있으면 사용하고, 없으면 하드코딩된 주소 사용
-    const baseUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL || "http://192.168.0.160:3007";
+    const baseUrl = "/api";
 
     fetch(
       `${baseUrl}/search?keyword=${encodeURIComponent(keyword)}`

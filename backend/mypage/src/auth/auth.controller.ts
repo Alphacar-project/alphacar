@@ -12,7 +12,7 @@ export class AuthController {
   kakaoLogin(@Res() res: Response) {
     const KAKAO_CLIENT_ID = "342d0463be260fc289926a0c63c4badc";
     // 프론트엔드 주소 (HTTPS 8000번)
-    const REDIRECT_URI = "https://192.168.0.160:8000/mypage"; 
+    const REDIRECT_URI = "https://192.168.0.160:8000/mypage/login"; 
 
     const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code`;
 

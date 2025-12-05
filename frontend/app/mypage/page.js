@@ -19,10 +19,9 @@ const clearAuthStorage = () => {
 export default function MyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const code = searchParams.get("code");   // 소셜 로그인 code
+  const code = searchParams.get("code"); // 소셜 로그인 code
   const state = searchParams.get("state"); // kakao / google
 
-  const [guestCode, setGuestCode] = useState("");
   const [showBanner, setShowBanner] = useState(true);
 
   // 로그인 유저 정보
@@ -56,7 +55,7 @@ export default function MyPage() {
 
           const { access_token, user: loggedInUser } = response.data;
 
-          // ⭐ [핵심 수정] 백엔드에서 provider가 안 넘어오면 강제로 주입
+          // ⭐ provider가 안 넘어오면 강제로 주입
           if (!loggedInUser.provider) {
             loggedInUser.provider = state === "google" ? "google" : "kakao";
           }
@@ -70,48 +69,46 @@ export default function MyPage() {
             );
           }
 
-          // 기본 토큰 & 유저 정보 저장 (이제 provider가 포함됨)
+          // 토큰 & 유저 정보 저장
           localStorage.setItem("accessToken", access_token);
           localStorage.setItem("alphacarUser", JSON.stringify(loggedInUser));
 
-          // 필요하면 환영 메시지
           alert(`${loggedInUser.nickname}님 환영합니다!`);
 
-          // URL의 ?code, ?state 제거
+          // URL 의 code/state 제거
           router.replace("/mypage");
-          return; // 여기서 끝내고, 새로 렌더될 때 아래 fetchMypageInfo가 실행됨
+          return;
         } catch (error) {
           console.error("로그인 실패:", error);
           clearAuthStorage();
           alert("로그인에 실패했습니다. 백엔드 연결을 확인해주세요.");
           router.replace("/mypage/login");
+          return;
         }
       }
 
-      // Case 2: 일반 접속 (또는 위에서 replace 후 재접속)
+      // Case 2: 일반 접속
       try {
-        // ✅ 토큰을 들고 백엔드에 마이페이지 정보 요청
         const data = await fetchMypageInfo();
 
         if (data.isLoggedIn && data.user) {
-          // ⭐ [핵심 수정] 불러온 데이터에 provider가 없으면 로컬스토리지 값으로 보정
           if (!data.user.provider) {
-            const localUser = JSON.parse(localStorage.getItem("alphacarUser") || "{}");
+            const localUser = JSON.parse(
+              localStorage.getItem("alphacarUser") || "{}"
+            );
             if (localUser.provider) {
               data.user.provider = localUser.provider;
             }
           }
           setUser(data.user);
         } else {
-          // 서버가 로그인 안 됐다고 응답한 경우
           setUser(null);
           clearAuthStorage();
-          router.replace("/mypage/login");
         }
       } catch (error) {
         console.error("마이페이지 정보 불러오기 실패:", error);
         clearAuthStorage();
-        router.replace("/mypage/login");
+        setUser(null);
       } finally {
         setCheckedAuth(true);
       }
@@ -124,19 +121,19 @@ export default function MyPage() {
   useEffect(() => {
     if (user) {
       const socialId = localStorage.getItem("user_social_id");
-      
+
       if (socialId) {
-        fetch(`http://192.168.0.160:3003/estimate/count?userId=${socialId}`)
+        fetch(`/api/estimate/count?userId=${socialId}`)
           .then(async (res) => {
             if (!res.ok) {
-              const errData = await res.json(); 
+              const errData = await res.json();
               throw new Error(errData.message || "서버 요청 실패");
             }
             return res.json();
           })
           .then((data) => {
             console.log("견적 개수 조회 성공:", data);
-            if (typeof data === 'number') {
+            if (typeof data === "number") {
               setEstimateCount(data);
             } else {
               setEstimateCount(0);
@@ -155,7 +152,7 @@ export default function MyPage() {
     if (confirm("정말 로그아웃 하시겠습니까?")) {
       clearAuthStorage();
       setUser(null);
-      setEstimateCount(0); 
+      setEstimateCount(0);
       alert("로그아웃 되었습니다.");
       router.replace("/mypage/login");
     }
@@ -165,22 +162,13 @@ export default function MyPage() {
     router.push("/mypage/login");
   };
 
-  const handleGuestSubmit = (e) => {
-    e.preventDefault();
-    if (!guestCode.trim()) {
-      alert("견적번호를 입력해주세요.");
-      return;
-    }
-    alert(`비회원 견적 조회 준비 중입니다. (입력값: ${guestCode})`);
-  };
-
   if (!checkedAuth) {
     return (
       <div style={{ padding: "60px 16px" }}>마이페이지 불러오는 중...</div>
     );
   }
 
-  // ✅ [수정] provider 변수 처리 (소문자 변환)
+  // ✅ provider 소문자 처리
   const provider = user?.provider ? user.provider.toLowerCase() : "email";
 
   // 🔻 UI 렌더링
@@ -256,7 +244,7 @@ export default function MyPage() {
                     fontSize: "14px",
                   }}
                 >
-                  {/* ✅ [수정] 배지 색상 및 텍스트 처리 */}
+                  {/* 로그인 제공자 배지 */}
                   <span
                     style={{
                       display: "inline-flex",
@@ -266,10 +254,10 @@ export default function MyPage() {
                       borderRadius: "999px",
                       background:
                         provider === "kakao"
-                          ? "#FEE500" // 카카오 노란색
+                          ? "#FEE500"
                           : provider === "google"
-                          ? "#fff"    // 구글 흰색
-                          : "#f3f4f6", // 기본 회색
+                          ? "#fff"
+                          : "#f3f4f6",
                       border: provider === "google" ? "1px solid #ddd" : "none",
                       fontSize: "12px",
                       fontWeight: 600,
@@ -284,7 +272,7 @@ export default function MyPage() {
                 </div>
               </div>
 
-              {/* 오른쪽: 로그아웃 버튼 */}
+              {/* 로그아웃 버튼 */}
               <button
                 onClick={handleLogout}
                 style={{
@@ -303,7 +291,7 @@ export default function MyPage() {
               </button>
             </section>
 
-            {/* ✅ 견적함 / 포인트 카드 */}
+            {/* 견적함 / 포인트 카드 */}
             <section
               style={{
                 display: "grid",
@@ -466,66 +454,11 @@ export default function MyPage() {
                 }}
               />
             </section>
-
-            <section style={{ width: "100%", maxWidth: "520px" }}>
-              <div
-                style={{
-                  borderRadius: "12px",
-                  border: "1px solid #eee",
-                  backgroundColor: "#fff",
-                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
-                  padding: "18px 22px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    marginBottom: "10px",
-                  }}
-                >
-                  비회원 견적함
-                </div>
-                <form
-                  onSubmit={handleGuestSubmit}
-                  style={{ display: "flex", gap: "8px" }}
-                >
-                  <input
-                    type="text"
-                    placeholder="견적번호를 입력하세요 (예: 12345)"
-                    value={guestCode}
-                    onChange={(e) => setGuestCode(e.target.value)}
-                    style={{
-                      flex: 1,
-                      height: "44px",
-                      borderRadius: "8px",
-                      border: "1px solid #ddd",
-                      padding: "0 12px",
-                      fontSize: "14px",
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    style={{
-                      width: "72px",
-                      height: "44px",
-                      borderRadius: "8px",
-                      border: "none",
-                      backgroundColor: "#111827",
-                      color: "#fff",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                    }}
-                  >
-                    조회
-                  </button>
-                </form>
-              </div>
-            </section>
+            {/* 🔸 비회원 견적함 섹션은 제거됨 */}
           </>
         )}
       </main>
     </div>
   );
 }
+

@@ -29,9 +29,9 @@ function CompareVsContent() {
     const fetchCompareData = async () => {
       try {
         setLoading(true);
-        const baseUrl = process.env.NEXT_PUBLIC_QUOTE_API_URL || "http://192.168.0.160:3003";
+        const baseUrl = "/api";
 
-        const res = await fetch(`${baseUrl}/quote/compare-data?ids=${idsParam}`);
+        const res = await fetch(`${baseUrl}/compare-data?ids=${idsParam}`);
         if (!res.ok) throw new Error("비교 데이터 로딩 실패");
 
         const data = await res.json();
@@ -162,7 +162,7 @@ function CompareVsContent() {
     };
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_QUOTE_API_URL || "http://192.168.0.160:3003";
+      const baseUrl = "/api";
       const res = await fetch(`${baseUrl}/estimate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

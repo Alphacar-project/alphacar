@@ -3,8 +3,9 @@
 
 import { useEffect, useState } from "react";
 
-// 백엔드 API 주소
-const API_BASE = "http://192.168.0.160:3003";
+// [수정됨] 하드코딩된 IP 제거 -> 프록시 경로 사용
+// 실제로는 next.config.mjs 설정을 통해 3003번 포트(견적 서비스)로 연결됩니다.
+const API_BASE = "/api";
 
 export default function MyPageQuotes() {
   const [quotes, setQuotes] = useState([]);
@@ -28,6 +29,7 @@ export default function MyPageQuotes() {
     }
 
     // 3. 견적 목록 불러오기 (백엔드 API 호출)
+    // 요청 주소: /api/estimate/list -> (프록시) -> 3003번/estimate/list
     fetch(`${API_BASE}/estimate/list?userId=${userSocialId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -48,6 +50,7 @@ export default function MyPageQuotes() {
 
     try {
       // 1. 백엔드에 삭제 요청 보내기
+      // 요청 주소: /api/estimate/{id}
       const res = await fetch(`${API_BASE}/estimate/${quoteId}`, {
         method: "DELETE",
       });
@@ -362,4 +365,3 @@ export default function MyPageQuotes() {
     </div>
   );
 }
-

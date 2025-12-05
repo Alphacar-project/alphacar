@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // 백엔드 API 주소 (3003번 포트 확인)
-const API_BASE = "http://192.168.0.160:3003/quote";
+const API_BASE = "/api";
 
 // ---------------- [1] 공통 컴포넌트: 차량 선택 박스 (옵션 선택 기능 제거됨) ----------------
 function CarSelector({ title, onSelectComplete, onReset, resetSignal }) {
@@ -24,8 +24,19 @@ function CarSelector({ title, onSelectComplete, onReset, resetSignal }) {
   useEffect(() => {
     fetch(`${API_BASE}/makers`)
       .then((res) => res.json())
-      .then((data) => setMakers(data))
-      .catch((err) => console.error("제조사 로딩 실패:", err));
+      .then((data) => {
+        // ★ 데이터가 진짜 배열인지 확인하고 넣기
+        if (Array.isArray(data)) {
+          setMakers(data);
+        } else {
+          console.error("제조사 데이터가 배열이 아닙니다:", data);
+          setMakers([]); // 배열이 아니면 빈 껍데기라도 넣어서 에러 방지
+        }
+      })
+      .catch((err) => {
+        console.error("제조사 로딩 실패:", err);
+        setMakers([]);
+      });
   }, []);
 
   // 2. 초기화 신호 감지
@@ -42,21 +53,47 @@ function CarSelector({ title, onSelectComplete, onReset, resetSignal }) {
 
   // 3. 핸들러들
   const handleMakerChange = (e) => {
-    const id = e.target.value;
-    const index = e.target.selectedIndex;
-    setMakerId(id);
-    setMakerName(e.target.options[index].text);
-    setModelId(""); setModelName(""); setTrimId(""); setTrimName("");
-    setTrims([]);
+    const makerId = e.target.value;
+    setMakerId(makerId);
+    
+    // [수정] 모델 목록 불러오기
+    // 1. 주소가 `/api/models` 인지 확인 (http://... 쓰면 안 됨)
+    // 2. 쿼리 파라미터 이름이 백엔드(@Query('makerId'))와 같은지 확인
+    fetch(`${API_BASE}/models?makerId=${makerId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          // [팁] 중복된 모델명이 있다면 여기서 제거해주는 게 좋습니다.
+          // (Lodash의 uniqBy 등을 쓰거나 아래처럼 Set 이용)
+          const uniqueModels = Array.from(new Map(data.map(m => [m.model_name, m])).values());
+          setModels(uniqueModels);
+        } else {
+          console.error("모델 데이터 오류:", data);
+          setModels([]);
+        }
+      })
+      .catch((err) => {
+        console.error("모델 로딩 실패:", err);
+        setModels([]);
+      });
 
-    if (id) {
-      fetch(`${API_BASE}/models?makerId=${id}`)
-        .then((res) => res.json())
-        .then((data) => setModels(data));
-    } else {
-      setModels([]);
-    }
+    // [수정] 트림 목록 가져오기
+    fetch(`${API_BASE}/trims?modelId=${modelId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTrims(data);
+        } else {
+          console.error("트림 데이터 오류:", data);
+          setTrims([]);
+        }
+      })
+      .catch((err) => {
+        console.error("트림 로딩 실패:", err);
+        setTrims([]);
+      });
   };
+
 
   const handleModelChange = (e) => {
     const id = e.target.value;
