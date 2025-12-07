@@ -1,10 +1,12 @@
 // backend/main/src/app.module.ts
 
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, Logger } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+
+import { RecentViewController } from './recent-view.controller';
 
 // [수정 1] 경로 변경: ./vehicle.schema -> ../../schemas/vehicle.schema
 import { Vehicle, VehicleSchema } from '../../schemas/vehicle.schema';
@@ -31,7 +33,19 @@ import { VehicleService } from './vehicle.service';
     ]),
     RedisModule,
   ],
-  controllers: [AppController, VehicleController],
+  controllers: [AppController, VehicleController, RecentViewController],
   providers: [AppService, VehicleService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  private readonly logger = new Logger('HTTP');
+
+  // 🚨 [추가] 모든 요청을 가로채서 로그를 찍는 미들웨어
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply((req, res, next) => {
+        this.logger.log(`📨 [요청 도착] ${req.method} ${req.originalUrl}`);
+        next();
+      })
+      .forRoutes('*');
+  }
+}

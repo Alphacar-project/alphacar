@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # 1. Jenkins: CI/CD 서버
   jenkins:
     image: jenkins/jenkins:lts-jdk17
     container_name: jenkins
@@ -20,68 +19,32 @@ services:
       - ci-net
     command: >
       bash -c "apt-get update &&
-               apt-get install -y maven &&
+               apt-get install -y maven wget unzip &&
                exec /usr/local/bin/jenkins.sh"
 
-  # 2. SonarQube: 코드 정적 분석 서버
   sonarqube:
-    image: sonarqube:community
+    image: sonarqube:latest
     container_name: sonarqube
     ports:
       - "9000:9000"
     environment:
-      - SONAR_JDBC_URL=jdbc:postgresql://postgres:5432/sonar
-      - SONAR_JDBC_USERNAME=sonar
-      - SONAR_JDBC_PASSWORD=sonar
       - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
     volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_extensions:/opt/sonarqube/extensions
-      - sonarqube_logs:/opt/sonarqube/logs
-    depends_on:
-      - postgres
+      - ./sonar_data:/opt/sonarqube/data
+      - ./sonar_extensions:/opt/sonarqube/extensions
     networks:
       - ci-net
 
-  # 3. PostgreSQL: SonarQube용 DB
-  postgres:
-    image: postgres:13
-    container_name: postgres
-    environment:
-      - POSTGRES_USER=sonar
-      - POSTGRES_PASSWORD=sonar
-      - POSTGRES_DB=sonar
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - ci-net
-
-  # 4. Trivy: 컨테이너 보안 스캐너 서버
   trivy:
     image: aquasec/trivy:latest
-    container_name: trivy-server
-    command: server --listen 0.0.0.0:4954 --cache-dir /root/.cache/trivy
+    container_name: trivy
+    command: server --listen :4954
     ports:
       - "4954:4954"
-    volumes:
-      - trivy-cache:/root/.cache/trivy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:4954/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     networks:
       - ci-net
 
 networks:
   ci-net:
-
-volumes:
-  jenkins_home:
-  sonarqube_data:
-  sonarqube_extensions:
-  sonarqube_logs:
-  postgres_data:
-  trivy-cache:
+    driver: bridge
 
