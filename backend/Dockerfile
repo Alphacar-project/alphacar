@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 # 선택된 앱만 빌드
-RUN npm run build ${APP_NAME}
+RUN npm nest build ${APP_NAME}
 
 # 2. 실행 단계
 FROM node:18-alpine
