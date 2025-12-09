@@ -44,3 +44,4 @@ Drive,GET,/drive,"드라이브 코스 목록 조회","","","-","200 OK ({ messag
 Drive,GET,/drive/{id},"드라이브 코스 상세 조회","","id (courseId)","-","200 OK (코스 상세)"
 
 
+
