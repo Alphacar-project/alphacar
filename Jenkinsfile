@@ -52,10 +52,10 @@ pipeline {
                     backendServices.each { service ->
                         sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
                     }
-                    
+
                     // 2. Frontend (1개)
                     sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
-                    
+
                     // 3. Nginx & HAProxy
                     sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
                     sh "docker build -f haproxy.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${HAPROXY_IMAGE}:${BACKEND_VERSION} ."
@@ -63,20 +63,16 @@ pipeline {
             }
         }
 
-        // 👇👇👇 [여기 추가됨!] 트리비 보안 스캔 👇👇👇
         stage('Trivy Security Scan') {
             steps {
                 script {
-                    // 1. 백엔드 이미지 스캔
+                    // 1. 백엔드 스캔
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     backendServices.each { service ->
                         echo "🛡️ Scanning Backend Service: ${service}"
-                        // exit-code 0: 취약점 있어도 빌드 실패 안 함 (보고만 함)
-                        // exit-code 1: 취약점 있으면 빌드 멈춤 (필요시 변경)
                         sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
                     }
-
-                    // 2. 프론트엔드 이미지 스캔
+                    // 2. 프론트엔드 스캔
                     echo "🛡️ Scanning Frontend Service"
                     sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
                 }
@@ -102,14 +98,40 @@ pipeline {
                 }
             }
         }
+
+        // 👇👇👇 [배포 단계] 서버에 접속해서 실행 👇👇👇
+        stage('Deploy to Server') {
+            steps {
+                // ssh-server: 젠킨스 credentials에 등록한 SSH 키 ID
+                // harbor-cred: 하버 로그인용 ID/PW
+                sshagent(credentials: ['ssh-server']) {
+                    withCredentials([usernamePassword(credentialsId: 'harbor-cred', usernameVariable: 'HB_USER', passwordVariable: 'HB_PASS')]) {
+                        script {
+                            def remoteIP = '192.168.0.160' // 배포할 서버 IP
+                            def remoteUser = 'kevin'       // 서버 사용자 ID
+                            
+                            sh """
+                            ssh -o StrictHostKeyChecking=no ${remoteUser}@${remoteIP} '
+                                cd ~/alphacar/deploy && \
+                                echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin && \
+                                docker compose pull && \
+                                docker compose up -d --force-recreate && \
+                                docker image prune -f
+                            '
+                            """
+                        }
+                    }
+                }
+            }
+        }
     }
-    
+
     post {
         success {
-            echo "✅ Build & Release Completed Successfully! 🎉"
+            echo "✅ All Stages Completed Successfully! 🎉"
         }
         failure {
-            echo "❌ Build Failed! Check logs for details."
+            echo "❌ Build Failed! Please check the logs."
         }
     }
 }
