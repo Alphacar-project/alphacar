@@ -78,47 +78,91 @@ export class AppService {
     }
 
     // 3. 기본 트림 목록 (차종별로 그룹화된 기본 트림)
-    // 실제로는 vehicle 레벨의 base_trim_name을 반환하거나, trims를 그룹화
+    // danawa_vehicle_data 컬렉션에서 해당 차량 모델의 모든 base_trim_name을 수집
     async getBaseTrimsByModel(vehicleId: string) {
         if (!vehicleId) return [];
 
         try {
             let vehicle: any = null;
-            vehicle = await this.vehicleModel.collection.findOne({ _id: vehicleId } as any);
-
-            if (!vehicle && Types.ObjectId.isValid(vehicleId)) {
-                vehicle = await this.vehicleModel.collection.findOne({ _id: new Types.ObjectId(vehicleId) } as any);
-            }
-
-            if (!vehicle) return [];
-            if (!vehicle.trims || vehicle.trims.length === 0) return [];
-
-            // vehicle 레벨의 base_trim_name이 있으면 그것을 사용
-            if (vehicle.base_trim_name) {
-                return [{
-                    _id: vehicle.base_trim_name,
-                    id: vehicle.base_trim_name,
-                    name: vehicle.base_trim_name,
-                    base_trim_name: vehicle.base_trim_name,
-                    vehicle_id: vehicleId,
-                    vehicle_name: vehicle.vehicle_name
-                }];
-            }
-
-            // base_trim_name이 없으면 trims의 첫 번째 트림 이름을 기본 트림으로 사용
-            const firstTrim = vehicle.trims[0];
-            const baseTrimName = firstTrim?.trim_name || '기본';
+            let vehicleName: string = '';
+            let modelId: string = '';
             
-            return [{
-                _id: baseTrimName,
-                id: baseTrimName,
-                name: baseTrimName,
-                base_trim_name: baseTrimName,
-                vehicle_id: vehicleId,
-                vehicle_name: vehicle.vehicle_name
-            }];
+            // ObjectId로 검색 시도
+            if (Types.ObjectId.isValid(vehicleId)) {
+                vehicle = await this.vehicleModel.findById(new Types.ObjectId(vehicleId)).lean().exec();
+                if (vehicle) {
+                    vehicleName = vehicle.vehicle_name || '';
+                    modelId = vehicle.model_id || '';
+                }
+            }
+            
+            // ObjectId가 아니거나 못 찾은 경우, 다른 필드로 검색
+            if (!vehicle) {
+                // vehicle_name이나 model_id로 검색 시도
+                vehicle = await this.vehicleModel.findOne({
+                    $or: [
+                        { model_id: vehicleId },
+                        { vehicle_name: vehicleId },
+                        { lineup_id: vehicleId }
+                    ]
+                }).lean().exec();
+                
+                if (vehicle) {
+                    vehicleName = vehicle.vehicle_name || vehicleId;
+                    modelId = vehicle.model_id || vehicleId;
+                } else {
+                    // vehicleId가 vehicle_name일 수도 있음
+                    vehicleName = vehicleId;
+                    modelId = vehicleId;
+                }
+            }
+
+            // 해당 차량 모델의 모든 문서를 찾아서 base_trim_name 수집
+            const query: any = {};
+            
+            if (vehicle && vehicle.vehicle_name) {
+                // vehicle_name으로 검색 (같은 모델의 모든 변형 포함)
+                query.vehicle_name = vehicle.vehicle_name;
+            } else if (vehicle && vehicle.model_id) {
+                // model_id로 검색
+                query.model_id = vehicle.model_id;
+            } else if (vehicleName) {
+                // vehicleName으로 검색
+                query.vehicle_name = vehicleName;
+            } else {
+                return [];
+            }
+
+            // 해당 차량 모델의 모든 문서 조회
+            const vehicles = await this.vehicleModel.find(query).lean().exec();
+            
+            if (!vehicles || vehicles.length === 0) return [];
+
+            // 모든 base_trim_name 수집 (중복 제거)
+            const baseTrimMap = new Map<string, any>();
+            
+            vehicles.forEach((v: any) => {
+                if (v.base_trim_name && v.base_trim_name.trim() !== '') {
+                    const baseTrimName = v.base_trim_name.trim();
+                    if (!baseTrimMap.has(baseTrimName)) {
+                        baseTrimMap.set(baseTrimName, {
+                            _id: baseTrimName,
+                            id: baseTrimName,
+                            name: baseTrimName,
+                            base_trim_name: baseTrimName,
+                            vehicle_id: v._id?.toString() || vehicleId,
+                            vehicle_name: v.vehicle_name || vehicleName
+                        });
+                    }
+                }
+            });
+
+            // Map에서 배열로 변환
+            const baseTrims = Array.from(baseTrimMap.values());
+
+            return baseTrims;
         } catch (e) {
-            console.error(e);
+            console.error('getBaseTrimsByModel 에러:', e);
             return [];
         }
     }

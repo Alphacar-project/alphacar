@@ -1,7 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { initializeTracing } from './tracing';
 
 async function bootstrap() {
+  // OpenTelemetry 초기화 (가장 먼저 실행)
+  const serviceName = process.env.SERVICE_NAME || 'search-backend';
+  initializeTracing(serviceName);
+
   const app = await NestFactory.create(AppModule);
 
   // 1. 상세 CORS 설정 적용 (User 요청 사항 반영)

@@ -111,7 +111,7 @@ export class ChatService implements OnModuleInit {
     };
   }
 
-  // [Helper] 식별된 정보로 설명 생성 (Llama 3.3 70B 사용) - 링크 로직 추가됨
+  // [Helper] 식별된 정보로 설명 생성 (Llama 3.3 70B 사용) - 링크 로직 수정됨
   private async generateCarDescription(carName: string, context: string): Promise<string> {
       const prompt = `
 <|begin_of_text|><|start_header_id|>system<|end_header_id|>
@@ -134,11 +134,12 @@ Your goal is to explain this vehicle to the user based **ONLY** on the provided 
 - The user MUST be able to click the image to see the quote.
 - **Step 1**: Find '이미지URL' (or 'ImageURL') in the [Context].
 - **Step 2**: Find 'BaseTrimId' in the [시스템 데이터] section of the [Context].
-- **Step 3**: Generate the image link using this EXACT Markdown format:
-  
-  [![${carName}](이미지URL_값)](/quote/personal/result?trimId=BaseTrimId_값)
+- **Step 3**: Find '모델명' (Model Name) in the [차량 정보] section of the [Context].
+- **Step 4**: Generate the image link using this EXACT Markdown format:
 
-- **WARNING**: Do NOT output raw URLs. Only use the Markdown link format above.
+  [![${carName}](이미지URL_값)](/quote/personal/result?trimId=BaseTrimId_값&modelName=모델명_값)
+
+- **WARNING**: Do NOT output raw URLs. Only use the Markdown link format above. Ensure 'modelName' is included.
 
 [Context (Vector Store Data)]
 ${context}
@@ -230,7 +231,7 @@ Identify the car in this image.
       } else {
           identifiedName = fullText.replace(/Reasoning:[\s\S]*?Final Answer:/i, "").trim();
       }
-      
+
       identifiedName = identifiedName.replace(/\.$/, '').trim();
       if (identifiedName.includes('NOT_CAR')) return 'NOT_CAR';
       return identifiedName;
@@ -256,7 +257,7 @@ Identify the car in this image.
     const isComparisonQuery = comparisonKeywords.some(keyword => userMessage.includes(keyword)) &&
                               (userMessage.includes('쏘나타') && userMessage.includes('K5'));
 
-    // 2. 시스템 프롬프트
+    // 2. 시스템 프롬프트 (요청대로 링크 포맷 수정됨)
     let systemPrompt = `
     You are the AI Automotive Specialist for 'AlphaCar'.
 
@@ -269,12 +270,13 @@ Identify the car in this image.
     - If the context contains 'ImageURL' and 'BaseTrimId' for the suggested car, you **MUST** display the image wrapped in a link.
     - **Purpose**: Clicking the image should take the user to the quote page.
     - **STRICT Format**:
-      [![Car Name](ImageURL)](/quote/personal/result?trimId=BaseTrimId)
+      [![Car Name](ImageURL)](/quote/personal/result?trimId=BaseTrimId_값&modelName=모델명_값)
 
     - **Instruction**:
       1. Extract 'ImageURL' from the context.
       2. Extract 'BaseTrimId' from the [시스템 데이터] section.
-      3. Combine them into the Markdown link above. Do NOT use placeholder IDs.
+      3. Extract '모델명' (Model Name) from the [차량 정보] section.
+      4. Combine them into the Markdown link above. Do NOT use placeholder IDs.
 
     [RESPONSE STRATEGY]
     - Act like a friendly, professional car dealer.

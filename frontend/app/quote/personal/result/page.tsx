@@ -55,6 +55,7 @@ interface CarDetailData {
   image_url?: string;
   main_image?: string;
   specs?: Specs;
+  selectedTrimSpecs?: Record<string, any> | null; // 선택된 트림의 전체 specifications
   options?: RawOption[];
   selected_options?: RawOption[];
   trims?: TrimData[];
@@ -117,6 +118,7 @@ const handleApiResponse = async (res: Response) => {
 function QuoteResultContent() {
   const searchParams = useSearchParams();
   const trimId = searchParams.get("trimId");
+  const modelName = searchParams.get("modelName");
   const router = useRouter();
 
   const [carDetail, setCarDetail] = useState<CarDetailData | null>(null);
@@ -137,7 +139,12 @@ function QuoteResultContent() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/vehicles/detail?trimId=${trimId}`);
+        // 차종 이름이 있으면 함께 전달
+        const queryParams = new URLSearchParams({ trimId });
+        if (modelName) {
+          queryParams.append('modelName', modelName);
+        }
+        const res = await fetch(`${API_BASE}/vehicles/detail?${queryParams.toString()}`);
         const rawVehicleData: CarDetailData = await handleApiResponse(res);
 
         // 트림 데이터 추출 및 병합
@@ -151,7 +158,7 @@ function QuoteResultContent() {
         
         if (selectedTrim) {
             mergedDetail = {
-                ...rawVehicleData,
+                ...rawVehicleData, // selectedTrimSpecs 포함
                 name: selectedTrim.trim_name, // 트림명
                 base_price: selectedTrim.price, // 트림 가격
                 options: selectedTrim.options || [], // 옵션 배열
@@ -494,38 +501,31 @@ function QuoteResultContent() {
             <span style={{ color: "#e11d48", fontSize: "20px" }}>{finalPrice.toLocaleString()}원</span>
           </div>
 
-          {/* 제원 정보 섹션 */}
-          {carDetail?.specs && (carDetail.specs.release_date || carDetail.specs.displacement_range || carDetail.specs.fuel_efficiency_range) && (
-            <div style={{ marginBottom: "24px", paddingTop: "20px", borderTop: "1px solid #eee" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "16px", color: "#333" }}>제원 정보</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
-                {carDetail.specs.release_date && (
-                  <div>
-                    <p style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>출시일</p>
-                    <p style={{ fontSize: "14px", fontWeight: 600, color: "#333" }}>
-                      {carDetail.specs.release_date}
-                    </p>
-                  </div>
-                )}
-                {carDetail.specs.displacement_range && (
-                  <div>
-                    <p style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>배기량</p>
-                    <p style={{ fontSize: "14px", fontWeight: 600, color: "#333" }}>
-                      {formatDisplacement(carDetail.specs.displacement_range)}
-                    </p>
-                  </div>
-                )}
-                {carDetail.specs.fuel_efficiency_range && (
-                  <div>
-                    <p style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>복합연비</p>
-                    <p style={{ fontSize: "14px", fontWeight: 600, color: "#333" }}>
-                      {formatFuelEfficiency(carDetail.specs.fuel_efficiency_range)}
-                    </p>
-                  </div>
-                )}
+          {/* 제원 정보 섹션 - 선택된 트림의 전체 specifications */}
+          {(() => {
+            const selectedTrimSpecs = carDetail?.selectedTrimSpecs || {};
+            const validSpecs = Object.entries(selectedTrimSpecs).filter(([key, value]) => {
+              if (value === null || value === undefined || value === '') return false;
+              if (typeof value === 'string' && value.trim() === '') return false;
+              return true;
+            });
+            
+            return validSpecs.length > 0 ? (
+              <div style={{ marginBottom: "24px", paddingTop: "20px", borderTop: "1px solid #eee" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "16px", color: "#333" }}>제원 정보</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+                  {validSpecs.map(([key, value]) => (
+                    <div key={key}>
+                      <p style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>{key}</p>
+                      <p style={{ fontSize: "14px", fontWeight: 600, color: "#333" }}>
+                        {String(value)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null;
+          })()}
 
           {/* 5. 하단 버튼 영역 */}
           <div style={{ display: "flex", gap: "12px" }}>

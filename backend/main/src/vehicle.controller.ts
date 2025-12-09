@@ -24,16 +24,17 @@ export class VehicleController {
 
   // 3. [GET] 상세 조회 (견적용)
   @Get('detail')
-  async getVehicleDetailData(@Query('trimId') trimId: string) {
+  async getVehicleDetailData(@Query('trimId') trimId: string, @Query('modelName') modelName?: string) {
     console.log(`\n================================================`);
     console.log(`[Controller] 📨 상세 견적 요청 도착!`);
     console.log(`   👉 받은 trimId: "${trimId}"`);
+    console.log(`   👉 받은 modelName: "${modelName || '없음'}"`);
     if (!trimId || trimId === 'undefined') {
       console.error(`[Controller] ❌ trimId가 없거나 undefined입니다.`);
       throw new NotFoundException('트림 ID가 유효하지 않습니다.');
     }
     try {
-      const result = await this.vehicleService.findOneByTrimId(trimId);
+      const result = await this.vehicleService.findOneByTrimId(trimId, modelName);
       if (!result) {
         console.error(`[Controller] ❌ 데이터를 찾을 수 없습니다: ${trimId}`);
         throw new NotFoundException(`해당 트림(${trimId}) 정보를 찾을 수 없습니다.`);

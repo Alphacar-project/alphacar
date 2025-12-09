@@ -8,11 +8,11 @@ import { Vehicle, VehicleSchema } from './vehicle.schema';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // triple_db 연결
+    // triple_db 연결 (환경 변수 사용으로 변경)
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (config: ConfigService) => ({
-        uri: `mongodb://${config.get('DATABASE_USER')}:${config.get('DATABASE_PASSWORD')}@${config.get('DATABASE_HOST')}:${config.get('DATABASE_PORT')}/triple_db?authSource=admin`,
+        uri: `mongodb://${config.get('DATABASE_USER')}:${config.get('DATABASE_PASSWORD')}@${config.get('DATABASE_HOST')}:${config.get('DATABASE_PORT')}/${config.get('DATABASE_NAME')}?authSource=admin`,
       }),
       inject: [ConfigService],
     }),

@@ -1,8 +1,12 @@
-// backend/aichat/src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { initializeTracing } from './tracing';
 
 async function bootstrap() {
+  // OpenTelemetry 초기화 (가장 먼저 실행)
+  const serviceName = process.env.SERVICE_NAME || 'aichat-backend';
+  initializeTracing(serviceName);
+
   const app = await NestFactory.create(AppModule);
 
   // ✅ [수정] CORS 설정: 실제 운영 중인 사이트 주소 허용
@@ -19,6 +23,6 @@ async function bootstrap() {
   // ✅ 포트는 4000번 유지 (8000번과 겹치지 않게)
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  console.log(`🚀 AI Chat Service is running on port ${port}`);
+  console.log(`AIChat Service is running on port ${port}`);
 }
 bootstrap();

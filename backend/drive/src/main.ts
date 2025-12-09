@@ -1,8 +1,12 @@
-// src/main.ts (모든 NestJS 프로젝트에 적용)
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { initializeTracing } from './tracing';
 
 async function bootstrap() {
+  // OpenTelemetry 초기화 (가장 먼저 실행)
+  const serviceName = process.env.SERVICE_NAME || 'drive-backend';
+  initializeTracing(serviceName);
+
   const app = await NestFactory.create(AppModule);
 
   // ✅ CORS 설정: 모든 오리진 (*) 허용

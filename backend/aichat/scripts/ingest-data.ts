@@ -8,12 +8,13 @@ import * as fs from 'fs';
 dotenv.config();
 
 async function bootstrap() {
-  console.log('🚀 [Final Fix] 트림 ID 매핑 누락 해결 및 데이터 동기화 시작...');
+  console.log('🚀 [danawa_vehicle_data 전용] 벡터 스토어 데이터 수집 시작...');
 
   // 1. 기존 벡터 스토어 삭제
   const vectorStorePath = './vector_store';
   if (fs.existsSync(vectorStorePath)) {
       fs.rmSync(vectorStorePath, { recursive: true, force: true });
+      console.log('🗑️  기존 벡터 스토어 삭제 완료');
   }
 
   const app = await NestFactory.createApplicationContext(ChatModule);
@@ -26,108 +27,28 @@ async function bootstrap() {
     await client.connect();
     const db = client.db('triple_db');
 
+    // ✅ danawa_vehicle_data 컬렉션만 사용
     const danawaCol = db.collection('danawa_vehicle_data');
-    const mfrCol = db.collection('manufacturers');
-    const vehCol = db.collection('vehicles');
-    const trimCol = db.collection('vehicletrims');
-    const optCol = db.collection('vehicleoptions');
 
     const newVehicles = await danawaCol.find({}).toArray();
-    console.log(`📦 총 ${newVehicles.length}대의 최신 차량 데이터를 처리합니다.`);
+    console.log(`📦 총 ${newVehicles.length}대의 차량 데이터를 처리합니다.`);
 
     let successCount = 0;
 
     for (const car of newVehicles as any[]) {
-      process.stdout.write(`🔄 동기화: ${car.vehicle_name}... `);
+      process.stdout.write(`🔄 처리 중: ${car.vehicle_name}... `);
 
-      // 1️⃣ 제조사 동기화
-      let mfrId: ObjectId;
-      const existingMfr = await mfrCol.findOne({ name: car.brand_name });
-      if (existingMfr) {
-          mfrId = existingMfr._id;
-      } else {
-          const res = await mfrCol.insertOne({ name: car.brand_name });
-          mfrId = res.insertedId;
-      }
-
-      // 2️⃣ 차량 모델 동기화
-      let vehId: ObjectId;
-      const existingVeh = await vehCol.findOne({ 
-          $or: [
-              { model_name: car.vehicle_name, manufacturer_id: mfrId },
-              { name: car.vehicle_name, brand_id: mfrId }
-          ]
-      });
-
-      if (existingVeh) {
-          vehId = existingVeh._id;
-          await vehCol.updateOne({ _id: vehId }, { $set: { 
-              image_url: car.main_image,
-              model_year: car.model_year,
-              name: car.vehicle_name,       
-              brand_id: mfrId
-          }});
-      } else {
-          const res = await vehCol.insertOne({
-              model_name: car.vehicle_name,
-              manufacturer_id: mfrId,
-              name: car.vehicle_name,
-              brand_id: mfrId,
-              image_url: car.main_image,
-              model_year: car.model_year,
-              created_at: new Date()
-          });
-          vehId = res.insertedId;
-      }
-
-      // 3️⃣ 트림 및 옵션 동기화
+      // ✅ danawa_vehicle_data의 trims 배열 직접 사용
       const trims = car.trims || [];
       trims.sort((a: any, b: any) => (a.price || 0) - (b.price || 0));
       
-      let baseTrimIdStr = ''; 
-
-      for (let i = 0; i < trims.length; i++) {
-          const t = trims[i];
-          let trimId: ObjectId;
-
-          const existingTrim = await trimCol.findOne({ 
-              vehicle_id: vehId, 
-              name: t.trim_name 
-          });
-
-          if (existingTrim) {
-              trimId = existingTrim._id;
-              await trimCol.updateOne({ _id: trimId }, { $set: { base_price: t.price } });
-          } else {
-              const res = await trimCol.insertOne({
-                  vehicle_id: vehId,
-                  name: t.trim_name,
-                  base_price: t.price,
-                  created_at: new Date()
-              });
-              trimId = res.insertedId;
-          }
-
-          // ★ [핵심 수정] 생성된 진짜 ID를 객체에 저장해둡니다. (나중에 텍스트 만들 때 씀)
-          t.legacy_id = trimId.toString();
-
-          if (i === 0) baseTrimIdStr = trimId.toString();
-
-          // 옵션 동기화
-          if (t.options && t.options.length > 0) {
-              for (const o of t.options) {
-                  const existingOpt = await optCol.findOne({ trim_id: trimId, name: o.option_name });
-                  if (!existingOpt) {
-                      await optCol.insertOne({
-                          trim_id: trimId,
-                          vehicle_id: vehId,
-                          name: o.option_name,
-                          price: o.option_price,
-                          is_selected: false
-                      });
-                  }
-              }
-          }
+      // ✅ 첫 번째 트림의 _id를 BaseTrimId로 사용 (danawa_vehicle_data의 실제 트림 ID)
+      let baseTrimIdStr = '';
+      if (trims.length > 0 && trims[0]._id) {
+        baseTrimIdStr = trims[0]._id.toString();
+      } else if (trims.length > 0 && trims[0].trim_name) {
+        // _id가 없으면 trim_name을 사용 (나중에 백엔드에서 검색 가능)
+        baseTrimIdStr = trims[0].trim_name;
       }
 
       // 4️⃣ 임베딩 데이터 생성
@@ -136,13 +57,14 @@ async function bootstrap() {
       const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
       const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
 
-      // ★ [핵심 수정] 텍스트 생성 시 저장해둔 legacy_id를 포함시킵니다.
-      const trimInfo = trims.map((t: any) => 
-          `- ${t.trim_name} (ID: ${t.legacy_id}): ${formatPrice(t.price)}`
-      ).join('\n        ');
+      // ✅ danawa_vehicle_data의 트림 정보 직접 사용
+      const trimInfo = trims.map((t: any) => {
+        const trimId = t._id ? t._id.toString() : t.trim_name;
+        return `- ${t.trim_name} (ID: ${trimId}): ${formatPrice(t.price)}`;
+      }).join('\n        ');
 
       let optionText = '옵션 정보 없음';
-      if (trims[0]?.options?.length > 0) {
+      if (trims[0]?.options && trims[0].options.length > 0) {
         const optList = trims[0].options.map((o: any) => 
             `- ${o.option_name}: ${o.option_price ? formatPrice(o.option_price) : ''}`
         ).join('\n        ');
@@ -169,7 +91,7 @@ async function bootstrap() {
 
         [가격 및 옵션 요약]
         가격 범위: ${formatPrice(minPrice)} ~ ${formatPrice(maxPrice)}
-        이미지URL: ${car.main_image}
+        이미지URL: ${car.main_image || car.image_url || ''}
 
         ${specText}
 
@@ -190,7 +112,8 @@ async function bootstrap() {
       successCount++;
     }
 
-    console.log(`\n🎉 완료! 이제 챗봇은 모든 트림의 진짜 ID를 알게 되었습니다.`);
+    console.log(`\n🎉 완료! 총 ${successCount}대의 차량 데이터가 벡터 스토어에 저장되었습니다.`);
+    console.log(`📝 이제 챗봇은 danawa_vehicle_data 컬렉션의 최신 데이터를 사용합니다.`);
 
   } catch (error) {
     console.error('❌ 에러 발생:', error);

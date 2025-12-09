@@ -33,8 +33,8 @@ export class VehicleService {
   // ==========================================================
   // [핵심] danawa_vehicle_data 컬렉션에서만 검색 (트림 ID, 차량 ID, 차량 이름, lineup_id 모두 처리)
   // ==========================================================
-  async findOneByTrimId(trimId: string): Promise<any | null> {
-    this.logger.log(`🔍 [danawa_vehicle_data 전용] 검색 요청: "${trimId}"`);
+  async findOneByTrimId(trimId: string, modelName?: string): Promise<any | null> {
+    this.logger.log(`🔍 [danawa_vehicle_data 전용] 검색 요청: "${trimId}"${modelName ? `, modelName: "${modelName}"` : ''}`);
 
     let vehicle: any = null;
 
@@ -80,34 +80,69 @@ export class VehicleService {
       const trimNameOnly = decodedId.split(':')[0].trim();
       this.logger.log(`   👉 트림 이름 검색 시도: "${trimNameOnly}" (원본: "${decodedId}")`);
       
-      // 정확히 일치하는 경우
-      vehicle = await this.vehicleModel.findOne({
-        'trims.trim_name': trimNameOnly
-      }).lean().exec();
-
-      if (vehicle) {
-        this.logger.log(`🎉 [성공] 트림 이름(정확 일치)으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
-      } else {
-        // 부분 일치로 검색 (대소문자 무시)
-        this.logger.log(`   👉 정확 일치 실패. 부분 일치로 검색 시도...`);
+      // 차종 이름이 있으면 함께 검색 (더 정확한 매칭)
+      if (modelName && modelName.trim()) {
+        const decodedModelName = decodeURIComponent(modelName).trim();
+        this.logger.log(`   👉 차종 이름과 함께 검색: "${decodedModelName}"`);
+        
+        // 차종 이름과 트림 이름을 함께 사용하여 검색
         vehicle = await this.vehicleModel.findOne({
-          'trims.trim_name': { $regex: trimNameOnly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+          $and: [
+            { vehicle_name: decodedModelName },
+            { 'trims.trim_name': trimNameOnly }
+          ]
         }).lean().exec();
 
         if (vehicle) {
-          this.logger.log(`🎉 [성공] 트림 이름(부분 일치)으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+          this.logger.log(`🎉 [성공] 차종명+트림명으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
         } else {
-          // Fallback: 차량 이름으로 검색
-          this.logger.log(`   👉 트림 이름으로 못 찾음. 차량 이름으로 검색 시도...`);
+          // 부분 일치로 검색
+          this.logger.log(`   👉 정확 일치 실패. 부분 일치로 검색 시도...`);
           vehicle = await this.vehicleModel.findOne({
-            $or: [
-                { name: { $regex: trimNameOnly, $options: 'i' } },
-                { vehicle_name: { $regex: trimNameOnly, $options: 'i' } }
+            $and: [
+              { vehicle_name: { $regex: decodedModelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+              { 'trims.trim_name': { $regex: trimNameOnly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } }
             ]
           }).lean().exec();
 
           if (vehicle) {
-            this.logger.log(`🎉 [성공] 차량 이름으로 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+            this.logger.log(`🎉 [성공] 차종명+트림명(부분 일치)으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+          }
+        }
+      }
+      
+      // 차종 이름이 없거나 위에서 못 찾은 경우, 트림 이름만으로 검색
+      if (!vehicle) {
+        this.logger.log(`   👉 트림 이름만으로 검색 시도...`);
+        // 정확히 일치하는 경우
+        vehicle = await this.vehicleModel.findOne({
+          'trims.trim_name': trimNameOnly
+        }).lean().exec();
+
+        if (vehicle) {
+          this.logger.log(`🎉 [성공] 트림 이름(정확 일치)으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+        } else {
+          // 부분 일치로 검색 (대소문자 무시)
+          this.logger.log(`   👉 정확 일치 실패. 부분 일치로 검색 시도...`);
+          vehicle = await this.vehicleModel.findOne({
+            'trims.trim_name': { $regex: trimNameOnly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+          }).lean().exec();
+
+          if (vehicle) {
+            this.logger.log(`🎉 [성공] 트림 이름(부분 일치)으로 차량 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+          } else {
+            // Fallback: 차량 이름으로 검색
+            this.logger.log(`   👉 트림 이름으로 못 찾음. 차량 이름으로 검색 시도...`);
+            vehicle = await this.vehicleModel.findOne({
+              $or: [
+                  { name: { $regex: trimNameOnly, $options: 'i' } },
+                  { vehicle_name: { $regex: trimNameOnly, $options: 'i' } }
+              ]
+            }).lean().exec();
+
+            if (vehicle) {
+              this.logger.log(`🎉 [성공] 차량 이름으로 찾음: ${vehicle['name'] || vehicle['vehicle_name']}`);
+            }
           }
         }
       }

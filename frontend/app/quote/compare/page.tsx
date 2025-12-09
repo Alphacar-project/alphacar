@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 
@@ -28,6 +28,7 @@ interface VehicleData {
   image_url?: string;
   main_image?: string;
   options?: Option[];
+  selectedTrimSpecs?: Record<string, any> | null; // 선택된 트림의 전체 specifications
   [key: string]: any;
 }
 
@@ -51,7 +52,7 @@ const handleApiResponse = async (res: Response) => {
 // ---------------- [1] 공통 컴포넌트: 차량 선택 박스 ----------------
 interface CarSelectorProps {
   title: string;
-  onSelectComplete: (trimId: string) => void;
+  onSelectComplete: (trimId: string, modelName?: string) => void;
   onReset?: () => void;
   resetSignal: number;
 }
@@ -83,8 +84,15 @@ function CarSelector({ title, onSelectComplete, onReset, resetSignal }: CarSelec
   }, []);
 
   // 2. 초기화 신호
+  const prevResetSignalRef = useRef(0);
   useEffect(() => {
-    handleReset();
+    if (resetSignal > prevResetSignalRef.current) {
+      setMakerId(""); setModelId(""); setBaseTrimId(""); setTrimId("");
+      setTrimName("");
+      setModels([]); setBaseTrims([]); setTrims([]);
+      prevResetSignalRef.current = resetSignal;
+      // onReset은 호출하지 않음 (무한 루프 방지)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal]);
 
@@ -228,17 +236,20 @@ function CarSelector({ title, onSelectComplete, onReset, resetSignal }: CarSelec
     if (onSelectComplete) {
       // "Reserve A/T:1" 형식에서 실제 트림 이름만 추출 (":숫자" 제거)
       const trimNameOnly = trimId.split(':')[0].trim();
-      onSelectComplete(trimNameOnly);
+      // 차종 이름 찾기
+      const selectedModel = models.find((m: any) => m._id === modelId);
+      const modelName = selectedModel?.model_name || selectedModel?.name || "";
+      onSelectComplete(trimNameOnly, modelName);
     }
   };
 
   return (
-    <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "24px 28px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "28px 32px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ fontSize: "18px", fontWeight: 700, marginBottom: "8px", color: "#1e293b" }}>{title}</div>
-      <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>제조사 → 차종 → 기본트림 → 세부트림 순서로 선택</div>
+      <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "24px" }}>제조사 → 차종 → 기본트림 → 세부트림 순서로 선택</div>
 
       {/* 내부 요소도 반응형 그리드 (4단계 필터링을 항상 4열로 표시) */}
-      <div className="filter-grid">
+      <div className="filter-grid" style={{ gap: "16px" }}>
 
         <div style={{ minWidth: 0 }}>
           <div style={labelStyle}>제조사</div>
@@ -322,7 +333,8 @@ function CarOptionSelectCard({ data, selectedSet, onToggle }: CarOptionSelectCar
   const basePrice = data.base_price || data.price || 0;
   
   const optionsTotal = (data.options || []).reduce((sum, opt, idx) => {
-    const id = opt._id || `opt-${idx}`;
+    // 체크박스에서 사용하는 ID와 동일하게 생성
+    const id = opt._id || String(idx);
     // price와 option_price 중 존재하는 값을 사용
     const price = opt.price || opt.option_price || 0;
     if (selectedSet.has(id)) {
@@ -332,9 +344,19 @@ function CarOptionSelectCard({ data, selectedSet, onToggle }: CarOptionSelectCar
   }, 0);
   
   const finalPrice = basePrice + optionsTotal;
+  
+  // 제원 정보 추출 - 선택된 트림의 전체 specifications
+  const selectedTrimSpecs = data.selectedTrimSpecs || {};
+  
+  // 값이 있는 항목만 필터링
+  const validSpecs = Object.entries(selectedTrimSpecs).filter(([key, value]) => {
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    return true;
+  });
 
   return (
-    <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "24px 28px 20px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", minHeight: "450px" }}>
+    <div style={{ backgroundColor: "#fff", borderRadius: "16px", padding: "24px 28px 20px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ textAlign: "center", marginBottom: "24px" }}>
         <div style={{ width: "100%", height: "140px", marginBottom: "16px", borderRadius: "12px", backgroundColor: data.image_url ? "transparent" : "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           {data.image_url || data.main_image ? ( // main_image 필드도 확인
@@ -352,11 +374,11 @@ function CarOptionSelectCard({ data, selectedSet, onToggle }: CarOptionSelectCar
         <span style={{ fontWeight: 700, color: "#333" }}>{basePrice.toLocaleString()}원</span>
       </div>
 
-      <div style={{ flex: 1, marginBottom: "20px", minHeight: "100px" }}>
+      <div style={{ flex: "0 0 auto", marginBottom: "20px", minHeight: "180px" }}>
         <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "8px", borderBottom: "2px solid #eee", paddingBottom: "6px" }}>
             옵션 선택 ({data.options?.length || 0})
         </div>
-        <div style={{ maxHeight: "120px", overflowY: "auto", paddingRight: "4px" }}>
+        <div style={{ maxHeight: "120px", overflowY: "auto", paddingRight: "4px", minHeight: "120px" }}>
           {(!data.options || data.options.length === 0) && (
             <div style={{ padding: "12px", textAlign: "center", color: "#999", fontSize: "12px" }}>선택 가능한 옵션이 없습니다.</div>
           )}
@@ -392,10 +414,27 @@ function CarOptionSelectCard({ data, selectedSet, onToggle }: CarOptionSelectCar
         </div>
       </div>
 
-      <div style={{ backgroundColor: "#111", color: "#fff", borderRadius: "12px", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto" }}>
+      <div style={{ backgroundColor: "#111", color: "#fff", borderRadius: "12px", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flex: "0 0 auto" }}>
         <span style={{ fontSize: "14px", opacity: 0.9 }}>최종 견적가</span>
         <span style={{ fontSize: "18px", fontWeight: 700, color: "#fbbf24" }}>{finalPrice.toLocaleString()}원</span>
       </div>
+
+      {/* 제원 정보 섹션 - 선택된 트림의 전체 specifications */}
+      {validSpecs.length > 0 && (
+        <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #eee", flex: "0 0 auto" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "16px", color: "#333" }}>제원 정보</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+            {validSpecs.map(([key, value]) => (
+              <div key={key}>
+                <p style={{ fontSize: "12px", color: "#888", marginBottom: "4px" }}>{key}</p>
+                <p style={{ fontSize: "14px", fontWeight: 600, color: "#333" }}>
+                  {String(value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -405,18 +444,20 @@ function CompareQuoteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [car1Data, setCar1Data] = useState<VehicleData | null>(null);
-  const [car2Data, setCar2Data] = useState<VehicleData | null>(null);
-
-  const [car1Opts, setCar1Opts] = useState<Set<string>>(new Set());
-  const [car2Opts, setCar2Opts] = useState<Set<string>>(new Set());
-
-  const [resetSignal, setResetSignal] = useState(0);
+  const MAX_CARS = 5;
+  const [carsData, setCarsData] = useState<(VehicleData | null)[]>([null, null]); // 초기값: 2대
+  const [carsOpts, setCarsOpts] = useState<Set<string>[]>([new Set(), new Set()]); // 초기값: 2대의 옵션
+  const [resetSignals, setResetSignals] = useState<number[]>([0, 0]); // 각 차량별 리셋 신호
 
   // ✅ 데이터 추출 및 병합 로직을 포함한 fetch 함수
-  const fetchCarDetail = async (trimId: string): Promise<VehicleData | null> => {
+  const fetchCarDetail = async (trimId: string, modelName?: string): Promise<VehicleData | null> => {
     try {
-      const res = await fetch(`${API_BASE}/vehicles/detail?trimId=${trimId}`);
+      // 차종 이름이 있으면 함께 전달
+      const queryParams = new URLSearchParams({ trimId });
+      if (modelName) {
+        queryParams.append('modelName', modelName);
+      }
+      const res = await fetch(`${API_BASE}/vehicles/detail?${queryParams.toString()}`);
       if (!res.ok) {
           let errorMsg = `조회 실패 (${res.status})`;
           try {
@@ -463,6 +504,7 @@ function CompareQuoteContent() {
           base_price: selectedTrim.price, // ✅ 트림 가격
           options: selectedTrim.options || [], // ✅ 옵션 배열
           image_url: rawVehicleData.main_image || rawVehicleData.image_url, // 이미지 URL 통합
+          selectedTrimSpecs: rawVehicleData.selectedTrimSpecs || null, // ✅ 선택된 트림의 전체 specifications
       };
       
       return mergedData;
@@ -481,7 +523,11 @@ function CompareQuoteContent() {
     if (car1_trimId) {
       fetchCarDetail(car1_trimId).then((data) => {
         if (data) {
-          setCar1Data(data);
+          setCarsData(prev => {
+            const newCars = [...prev];
+            newCars[0] = data;
+            return newCars;
+          });
 
           // 옵션 ID 문자열을 파싱하여 Set으로 변환
           if (car1_options) {
@@ -504,7 +550,11 @@ function CompareQuoteContent() {
                 }
               });
             }
-            setCar1Opts(selectedOpts);
+            setCarsOpts(prev => {
+              const newOpts = [...prev];
+              newOpts[0] = selectedOpts;
+              return newOpts;
+            });
           }
         }
       });
@@ -512,58 +562,116 @@ function CompareQuoteContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const handleSelect1 = async (trimId: string) => {
-    const data = await fetchCarDetail(trimId);
+  // 차량 추가 함수
+  const handleAddCar = useCallback(() => {
+    if (carsData.length >= MAX_CARS) {
+      alert(`최대 ${MAX_CARS}대까지 비교할 수 있습니다.`);
+      return;
+    }
+    // 상태 업데이트를 한 번에 처리
+    setCarsData(prev => {
+      if (prev.length >= MAX_CARS) return prev;
+      const newCars = [...prev];
+      newCars.push(null);
+      return newCars;
+    });
+    setCarsOpts(prev => {
+      if (prev.length >= MAX_CARS) return prev;
+      const newOpts = [...prev];
+      newOpts.push(new Set());
+      return newOpts;
+    });
+    setResetSignals(prev => {
+      if (prev.length >= MAX_CARS) return prev;
+      const newSignals = [...prev];
+      newSignals.push(0);
+      return newSignals;
+    });
+  }, [carsData.length]);
+
+  // 차량 제거 함수
+  const handleRemoveCar = (index: number) => {
+    if (carsData.length <= 2) {
+      alert("최소 2대의 차량은 선택해야 합니다.");
+      return;
+    }
+    setCarsData(prev => prev.filter((_, i) => i !== index));
+    setCarsOpts(prev => prev.filter((_, i) => i !== index));
+    setResetSignals(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 차량 선택 핸들러 (인덱스 기반)
+  const handleSelectCar = (index: number) => async (trimId: string, modelName?: string) => {
+    const data = await fetchCarDetail(trimId, modelName);
     if (data) {
-      setCar1Data(data);
-      setCar1Opts(new Set());
+      setCarsData(prev => {
+        const newCars = [...prev];
+        newCars[index] = data;
+        return newCars;
+      });
+      setCarsOpts(prev => {
+        const newOpts = [...prev];
+        newOpts[index] = new Set();
+        return newOpts;
+      });
     }
   };
 
-  const handleSelect2 = async (trimId: string) => {
-    const data = await fetchCarDetail(trimId);
-    if (data) {
-      setCar2Data(data);
-      setCar2Opts(new Set());
-    }
+  // 차량 리셋 핸들러
+  const handleResetCar = (index: number) => {
+    setCarsData(prev => {
+      const newCars = [...prev];
+      newCars[index] = null;
+      return newCars;
+    });
+    setCarsOpts(prev => {
+      const newOpts = [...prev];
+      newOpts[index] = new Set();
+      return newOpts;
+    });
+    setResetSignals(prev => {
+      const newSignals = [...prev];
+      newSignals[index] = newSignals[index] + 1;
+      return newSignals;
+    });
   };
 
   const handleResetAll = () => {
-    setCar1Data(null); setCar2Data(null);
-    setCar1Opts(new Set()); setCar2Opts(new Set());
-    setResetSignal(s => s + 1);
+    setCarsData([null, null]);
+    setCarsOpts([new Set(), new Set()]);
+    setResetSignals([0, 0]);
   };
 
-  const toggleCar1Opt = (id: string) => {
-    const newSet = new Set(car1Opts);
-    if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-    setCar1Opts(newSet);
-  };
-
-  const toggleCar2Opt = (id: string) => {
-    const newSet = new Set(car2Opts);
-    if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-    setCar2Opts(newSet);
+  // 옵션 토글 핸들러 (인덱스 기반)
+  const toggleCarOpt = (index: number) => (id: string) => {
+    setCarsOpts(prev => {
+      const newOpts = [...prev];
+      const newSet = new Set(newOpts[index]);
+      if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+      newOpts[index] = newSet;
+      return newOpts;
+    });
   };
 
   const handleViewResult = () => {
-    if (!car1Data || !car2Data) {
-      alert("두 대의 차량을 모두 선택해야 비교가 가능합니다.");
+    const selectedCars = carsData.filter(car => car !== null);
+    if (selectedCars.length < 2) {
+      alert("최소 2대의 차량을 선택해야 비교가 가능합니다.");
       return;
     }
 
-    const id1 = car1Data._id || car1Data.id;
-    const id2 = car2Data._id || car2Data.id;
-
-    if (!id1 || !id2) {
-        alert("차량 ID를 식별할 수 없습니다. 다시 선택해주세요.");
-        return;
+    const ids = selectedCars.map(car => car!._id || car!.id).filter(id => id);
+    if (ids.length !== selectedCars.length) {
+      alert("차량 ID를 식별할 수 없습니다. 다시 선택해주세요.");
+      return;
     }
 
-    const ids = `${id1},${id2}`;
-    const opts1 = Array.from(car1Opts).join(",");
-    const opts2 = Array.from(car2Opts).join(",");
-    router.push(`/quote/compare/vs?ids=${ids}&opts1=${opts1}&opts2=${opts2}`);
+    const opts = carsOpts.slice(0, selectedCars.length).map(opts => Array.from(opts).join(","));
+    const queryParams = new URLSearchParams({ ids: ids.join(",") });
+    opts.forEach((opt, idx) => {
+      queryParams.append(`opts${idx + 1}`, opt);
+    });
+    router.push(`/quote/compare/vs?${queryParams.toString()}`);
   };
 
   return (
@@ -573,32 +681,166 @@ function CompareQuoteContent() {
         <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
                 <h1 style={{ fontSize: "28px", fontWeight: 800, color: "#1e293b", margin: 0 }}>비교견적</h1>
-                <p style={{ fontSize: "15px", color: "#64748b", marginTop: "4px" }}>두 차량을 가로로 나란히 비교해보세요.</p>
+                <p style={{ fontSize: "15px", color: "#64748b", marginTop: "4px" }}>최대 {MAX_CARS}대까지 차량을 비교해보세요.</p>
             </div>
             <button onClick={handleResetAll} style={btnResetStyle}>전체 초기화</button>
         </div>
 
-        {/* 상단: 차량 선택 박스 2개 가로 배치 */}
-        <div className="car-selector-grid">
-            <CarSelector title="차량 1 선택" onSelectComplete={handleSelect1} onReset={() => setCar1Data(null)} resetSignal={resetSignal} />
-            <CarSelector title="차량 2 선택" onSelectComplete={handleSelect2} onReset={() => setCar2Data(null)} resetSignal={resetSignal} />
+        {/* 상단: 차량 선택 박스들 가로 배치 (가로 스크롤 가능) */}
+        <div style={{ 
+          overflowX: "auto",
+          overflowY: "visible",
+          marginBottom: "40px",
+          paddingTop: "20px",
+          paddingBottom: "20px",
+          paddingLeft: "10px",
+          paddingRight: "10px",
+          WebkitOverflowScrolling: "touch",
+        }}>
+          <div style={{ 
+            display: "flex", 
+            gap: "20px",
+            minWidth: "max-content",
+          }}>
+            {carsData.map((car, index) => (
+              <div key={index} style={{ position: "relative", flexShrink: 0, width: "550px" }}>
+                <CarSelector 
+                  title={`차량 ${index + 1} 선택`} 
+                  onSelectComplete={handleSelectCar(index)} 
+                  onReset={() => handleResetCar(index)} 
+                  resetSignal={resetSignals[index]} 
+                />
+                {carsData.length > 2 && (
+                  <button
+                    onClick={() => handleRemoveCar(index)}
+                    style={{
+                      position: "absolute",
+                      top: "-16px",
+                      right: "-16px",
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "50%",
+                      backgroundColor: "#ef4444",
+                      color: "#fff",
+                      border: "3px solid #fff",
+                      cursor: "pointer",
+                      fontSize: "26px",
+                      fontWeight: "bold",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 3px 10px rgba(0,0,0,0.4)",
+                      zIndex: 10,
+                      lineHeight: "1",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                    title="차량 제거"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            
+            {/* 추가 버튼 (최대 5개까지) */}
+            {carsData.length < MAX_CARS && (
+              <div
+                onClick={handleAddCar}
+                style={{
+                  backgroundColor: "#fff",
+                  borderRadius: "16px",
+                  padding: "32px",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                  border: "2px dashed #cbd5e1",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  minHeight: "400px",
+                  flexShrink: 0,
+                  width: "550px",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "#2563eb";
+                  e.currentTarget.style.backgroundColor = "#f8fafc";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "#cbd5e1";
+                  e.currentTarget.style.backgroundColor = "#fff";
+                }}
+              >
+                <div
+                  style={{
+                    width: "60px",
+                    height: "60px",
+                    borderRadius: "50%",
+                    backgroundColor: "#2563eb",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "32px",
+                    fontWeight: "bold",
+                    marginBottom: "16px",
+                  }}
+                >
+                  +
+                </div>
+                <div style={{ fontSize: "16px", fontWeight: 600, color: "#475569", textAlign: "center" }}>
+                  차량 추가
+                </div>
+                <div style={{ fontSize: "13px", color: "#94a3b8", marginTop: "4px", textAlign: "center" }}>
+                  최대 {MAX_CARS}대까지
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 하단: 결과 박스 2개 가로 배치 */}
-        {(car1Data || car2Data) && (
+        {/* 하단: 결과 박스들 가로 배치 */}
+        {carsData.some(car => car !== null) && (
             <div style={{ animation: "fadeIn 0.4s ease-out", borderTop: "2px dashed #e2e8f0", paddingTop: "40px" }}>
                 <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#333", marginBottom: "20px", textAlign: "center" }}>
                     선택된 차량 정보 및 옵션
                 </h2>
 
-                <div className="car-result-grid">
-                    {/* 데이터가 없으면 빈 칸을 둬서 레이아웃 유지 */}
-                    {car1Data ? <CarOptionSelectCard data={car1Data} selectedSet={car1Opts} onToggle={toggleCar1Opt} /> : <div className="empty-car-card">차량 1을 선택해주세요</div>}
-
-                    {car2Data ? <CarOptionSelectCard data={car2Data} selectedSet={car2Opts} onToggle={toggleCar2Opt} /> : <div className="empty-car-card">차량 2를 선택해주세요</div>}
+                <div style={{ 
+                  overflowX: "auto",
+                  overflowY: "visible",
+                  paddingTop: "20px",
+                  paddingBottom: "20px",
+                  paddingLeft: "10px",
+                  paddingRight: "10px",
+                  WebkitOverflowScrolling: "touch",
+                }}>
+                  <div style={{ 
+                    display: "flex", 
+                    gap: "20px",
+                    minWidth: "max-content",
+                    alignItems: "stretch"
+                  }}>
+                    {carsData.map((car, index) => (
+                      <div key={index} style={{ flexShrink: 0, width: "550px" }}>
+                        {car ? (
+                          <CarOptionSelectCard 
+                            data={car} 
+                            selectedSet={carsOpts[index]} 
+                            onToggle={toggleCarOpt(index)} 
+                          />
+                        ) : (
+                          <div className="empty-car-card">
+                            차량 {index + 1}을 선택해주세요
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {car1Data && car2Data && (
+                {carsData.filter(car => car !== null).length >= 2 && (
                     <div style={{ marginTop: "40px", textAlign: "center" }}>
                         <button onClick={handleViewResult} style={btnResultStyle}>
                             상세 비교 결과 보기 →
@@ -616,7 +858,7 @@ function CompareQuoteContent() {
         }
         .car-selector-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
           gap: 24px;
           margin-bottom: 40px;
         }
@@ -628,7 +870,7 @@ function CompareQuoteContent() {
         .filter-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
+          gap: 16px;
           margin-bottom: 20px;
         }
         @media (max-width: 1024px) {
@@ -638,9 +880,9 @@ function CompareQuoteContent() {
         }
         .car-result-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 24px;
-          align-items: start;
+          align-items: stretch;
         }
         @media (max-width: 768px) {
           .car-result-grid {
@@ -673,7 +915,7 @@ export default function CompareQuotePage() {
 }
 
 // 스타일
-const selectStyle: React.CSSProperties = { width: "100%", height: "180px", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "8px", fontSize: "14px", outline: "none", color: "#333" };
+const selectStyle: React.CSSProperties = { width: "100%", height: "180px", borderRadius: "8px", border: "1px solid #e2e8f0", padding: "10px 12px", fontSize: "14px", outline: "none", color: "#333", minWidth: "120px" };
 const labelStyle: React.CSSProperties = { fontSize: "13px", fontWeight: 700, color: "#475569", marginBottom: "6px" };
 const btnResetStyle: React.CSSProperties = { padding: "10px 18px", borderRadius: "8px", border: "1px solid #cbd5e1", backgroundColor: "#fff", color: "#64748b", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "0.2s" };
 const btnSearchStyle: React.CSSProperties = { padding: "8px 20px", borderRadius: "8px", border: "none", backgroundColor: "#2563eb", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "0.2s" };

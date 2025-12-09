@@ -84,7 +84,6 @@ export class AppService {
 
   // ✅ [수정] 브랜드별 필터링 및 가격 범위(최소~최대) 계산
   async getCarList(brand?: string) {
-    console.log(`[AppService] getCarList: 차량 목록 조회 시작${brand ? ` (브랜드: ${brand})` : ''}`);
     
     // 브랜드 필터링 조건 생성
     const brandMatch: any = {};
@@ -92,15 +91,12 @@ export class AppService {
       brandMatch.brand_name = brand;
     }
     
-    console.log(`[AppService] brandMatch:`, JSON.stringify(brandMatch));
-    console.log(`[AppService] brandMatch keys length:`, Object.keys(brandMatch).length);
     
     const pipeline: any[] = [];
     
     // 브랜드 필터링을 먼저 적용 (가능한 경우)
     if (Object.keys(brandMatch).length > 0) {
       pipeline.push({ $match: brandMatch });
-      console.log(`[AppService] 브랜드 필터링 추가:`, JSON.stringify(brandMatch));
     }
     
     pipeline.push(
@@ -237,29 +233,21 @@ export class AppService {
       $sort: { minPrice: 1 } // 최소가격 순으로 정렬
     });
     
-    console.log(`[AppService] Pipeline stages:`, pipeline.length);
-    console.log(`[AppService] Model collection name:`, this.vehicleModel.collection.name);
     
     // 디버깅: 브랜드 필터링 전 데이터 확인
     if (Object.keys(brandMatch).length > 0) {
       const beforeFilter = await this.vehicleModel.countDocuments(brandMatch).exec();
-      console.log(`[AppService] 브랜드 필터링 전 문서 수: ${beforeFilter}건`);
     }
     
     const vehicles = await this.vehicleModel.aggregate(pipeline).exec();
     
-    console.log(`[AppService] Aggregation 결과: ${vehicles.length}건`);
     if (vehicles.length > 0) {
-      console.log(`[AppService] 첫 번째 결과:`, JSON.stringify(vehicles[0], null, 2).substring(0, 300));
     } else {
-      console.log(`[AppService] ⚠️ 결과가 0건입니다. 파이프라인을 확인하세요.`);
     }
 
-    console.log(`[AppService] getCarList: 총 ${vehicles.length}건 조회 완료.`);
     
     // 디버깅: 처음 몇 개 데이터 확인
     if (vehicles.length > 0) {
-      console.log('[AppService] 샘플 데이터:', JSON.stringify(vehicles[0], null, 2));
     }
     
     return vehicles;
@@ -286,7 +274,6 @@ export class AppService {
       
       return analysis;
     } catch (error) {
-      console.error('[getReviewAnalysis] 에러:', error);
       return null;
     }
   }
