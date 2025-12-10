@@ -49,6 +49,24 @@ pipeline {
             }
         }
 
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        def qgBackend = waitForQualityGate()
+                        if (qgBackend.status != 'OK') {
+                            error "Backend Quality Gate failed: ${qgBackend.status}"
+                        }
+                        
+                        def qgFrontend = waitForQualityGate()
+                        if (qgFrontend.status != 'OK') {
+                            error "Frontend Quality Gate failed: ${qgFrontend.status}"
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
                 script {
