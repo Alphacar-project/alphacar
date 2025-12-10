@@ -17,7 +17,7 @@ COPY ${APP_NAME}/package.json ${APP_NAME}/
 # 1-3. 의존성 설치 (CI 모드: 빠르고 정확함)
 # 이때는 빌드를 위해 devDependencies(NestCLI 등)가 모두 설치됩니다.
 RUN npm install -g @nestjs/cli
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # 1-4. 소스 코드 복사 및 빌드
 COPY . .
