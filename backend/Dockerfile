@@ -30,8 +30,9 @@ RUN cd ${APP_NAME} && nest build
 
 # 🔥 [다이어트 핵심] 빌드 완료 후, 실행에 필요 없는 '개발용 패키지' 제거
 # 이 명령어가 실행되면 node_modules 크기가 확 줄어듭니다.
-RUN npm prune --production
-RUN cd ${APP_NAME} && npm prune --production
+# 네트워크 타임아웃 방지를 위해 재시도 로직 추가
+RUN npm prune --production --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=60000 || npm prune --production --offline || true
+RUN cd ${APP_NAME} && (npm prune --production --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=60000 || npm prune --production --offline || true)
 
 # ---------------------------------------------------
 # 2. 실행 단계 (Runner) - 초경량화
