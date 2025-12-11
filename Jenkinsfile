@@ -259,14 +259,14 @@ pipeline {
                                 sh """
                                 set -e
                                 echo "🔗 Connecting to ${remoteUser}@${remoteIP}..."
-                                ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${remoteUser}@${remoteIP} <<'ENDSSH'
+                                ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${remoteUser}@${remoteIP} bash -s <<ENDSSH
                                 set -e
                                 echo "📁 Creating deploy directory..."
                                 mkdir -p ~/alphacar/deploy
                                 cd ~/alphacar/deploy
                                 
                                 echo "📝 Writing .env file..."
-                                cat > .env <<'EOF_ENV'
+                                cat > .env <<EOF_ENV
 ${envContent}
 BACKEND_VERSION=${BACKEND_VERSION}
 FRONTEND_VERSION=${FRONTEND_VERSION}
@@ -275,7 +275,7 @@ EOF_ENV
                                 echo "✅ .env file created"
 
                                 echo "🔐 Logging into Harbor..."
-                                echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin || {
+                                echo '${HB_PASS}' | docker login ${HARBOR_URL} -u '${HB_USER}' --password-stdin || {
                                     echo "❌ Harbor login failed"
                                     exit 1
                                 }
@@ -302,7 +302,7 @@ EOF_ENV
                                 
                                 echo "📊 Service status:"
                                 docker compose ps
-                                ENDSSH
+ENDSSH
                                 echo "✅ Deployment completed successfully"
                                 """
                             } catch (Exception e) {
