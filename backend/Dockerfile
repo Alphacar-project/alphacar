@@ -19,7 +19,7 @@ COPY ${APP_NAME}/package.json ${APP_NAME}/
 RUN npm install -g @nestjs/cli
 RUN npm install --legacy-peer-deps
 # 앱별 의존성도 설치 (aichat/package.json의 의존성)
-
+RUN cd ${APP_NAME} && npm install --legacy-peer-deps
 
 # 1-4. 소스 코드 복사 및 빌드
 COPY . .
