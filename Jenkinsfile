@@ -56,34 +56,38 @@ pipeline {
             }
         }
 
-        // ✅ Docker 빌드 병렬화 및 캐시 활용
+        // ✅ Docker 빌드 병렬화 및 캐시 활용 (최대 4개씩 실행하여 리소스 경쟁 방지)
         stage('Build Docker Images') {
             steps {
                 script {
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
-                    // 병렬 빌드 맵 생성
-                    def buildSteps = [:]
+                    // Backend 서비스들을 4개씩 그룹으로 나누어 병렬 빌드
+                    def serviceGroups = backendServices.collate(4)  // 4개씩 그룹화
                     
-                    // Backend 서비스들 병렬 빌드
-                    backendServices.each { service ->
-                        buildSteps["Backend-${service}"] = {
-                            sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
+                    serviceGroups.eachWithIndex { group, groupIndex ->
+                        echo "🏗️ Building group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
+                        
+                        def buildSteps = [:]
+                        group.each { service ->
+                            buildSteps["Backend-${service}"] = {
+                                sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
+                            }
                         }
+                        
+                        // 마지막 그룹에 Frontend와 Nginx 추가
+                        if (groupIndex == serviceGroups.size() - 1) {
+                            buildSteps['Frontend'] = {
+                                sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
+                            }
+                            buildSteps['Nginx'] = {
+                                sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
+                            }
+                        }
+                        
+                        // 그룹 내에서 병렬 실행
+                        parallel buildSteps
                     }
-                    
-                    // Frontend 병렬 빌드
-                    buildSteps['Frontend'] = {
-                        sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
-                    }
-                    
-                    // Nginx 병렬 빌드
-                    buildSteps['Nginx'] = {
-                        sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
-                    }
-                    
-                    // 모든 빌드를 병렬로 실행
-                    parallel buildSteps
                 }
             }
         }
