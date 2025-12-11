@@ -97,7 +97,7 @@ const clearAuthStorage = () => {
   }
 };
 
-export default function MyPageLogin() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams(); // ✅ 쿼리 파라미터 가져오기
 
