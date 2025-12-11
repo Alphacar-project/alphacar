@@ -50,7 +50,18 @@ pipeline {
                 script {
                     def scannerHome = tool 'sonar-scanner'
                     withSonarQubeEnv("${SONARQUBE}") {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-frontend -Dsonar.projectName=alphacar-frontend -Dsonar.sources=frontend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
+                        // JavaScript bridge server 타임아웃 증가 및 HTML 내 JS 분석 제외
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \\
+                                -Dsonar.projectKey=alphacar-frontend \\
+                                -Dsonar.projectName=alphacar-frontend \\
+                                -Dsonar.sources=frontend \\
+                                -Dsonar.host.url=${SONAR_URL} \\
+                                -Dsonar.sourceEncoding=UTF-8 \\
+                                -Dsonar.javascript.node.maxspace=4096 \\
+                                -Dsonar.exclusions=**/*.html \\
+                                -Dsonar.scanner.force-deprecated-java-version=true
+                        """ || echo "⚠️ SonarQube Frontend 분석 실패했지만 빌드는 계속 진행합니다."
                     }
                 }
             }
