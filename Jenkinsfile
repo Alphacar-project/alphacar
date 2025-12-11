@@ -88,11 +88,12 @@ pipeline {
             }
         }
 
-        // ✅ Trivy 스캔 병렬화
+        // ✅ Trivy 스캔 병렬화 및 최적화
         stage('Trivy Security Scan') {
             steps {
                 script {
                     def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
+                    def TRIVY_OPTIONS = "--exit-code 0 --severity HIGH,CRITICAL --timeout 5m --no-progress --skip-db-update --cache-dir /root/.cache/trivy ${SKIP_CACHE_FILES}"
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
                     // 병렬 스캔 맵 생성
@@ -101,13 +102,13 @@ pipeline {
                     backendServices.each { service ->
                         scanSteps["Scan-Backend-${service}"] = {
                             echo "🛡️ Scanning Backend Service: ${service}"
-                            sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                            sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
                         }
                     }
                     
                     scanSteps['Scan-Frontend'] = {
                         echo "🛡️ Scanning Frontend Service"
-                        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+                        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
                     }
                     
                     // 모든 스캔을 병렬로 실행
