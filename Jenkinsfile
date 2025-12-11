@@ -253,26 +253,62 @@ pipeline {
                             def remoteIP = '192.168.0.160'
                             def remoteUser = 'kevin'
 
-                            def envContent = readFile(ENV_FILE_PATH).trim()
+                            try {
+                                def envContent = readFile(ENV_FILE_PATH).trim()
 
-                            sh """
-                            ssh -o StrictHostKeyChecking=no ${remoteUser}@${remoteIP} <<ENDSSH
-                            mkdir -p ~/alphacar/deploy
-                            cat > ~/alphacar/deploy/.env <<EOF_ENV
+                                sh """
+                                set -e
+                                echo "🔗 Connecting to ${remoteUser}@${remoteIP}..."
+                                ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${remoteUser}@${remoteIP} <<'ENDSSH'
+                                set -e
+                                echo "📁 Creating deploy directory..."
+                                mkdir -p ~/alphacar/deploy
+                                cd ~/alphacar/deploy
+                                
+                                echo "📝 Writing .env file..."
+                                cat > .env <<'EOF_ENV'
 ${envContent}
 BACKEND_VERSION=${BACKEND_VERSION}
 FRONTEND_VERSION=${FRONTEND_VERSION}
 EOF_ENV
-                            chmod 600 ~/alphacar/deploy/.env
+                                chmod 600 .env
+                                echo "✅ .env file created"
 
-                            # 하버 로그인 (원격에서 token/username으로 로그인)
-                            echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin
+                                echo "🔐 Logging into Harbor..."
+                                echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin || {
+                                    echo "❌ Harbor login failed"
+                                    exit 1
+                                }
+                                echo "✅ Harbor login successful"
 
-                            cd ~/alphacar/deploy
-                            docker compose pull
-                            docker compose up -d --force-recreate
-                            ENDSSH
-                            """
+                                echo "📥 Pulling images..."
+                                if [ ! -f docker-compose.yml ]; then
+                                    echo "❌ docker-compose.yml not found in ~/alphacar/deploy"
+                                    exit 1
+                                fi
+                                
+                                docker compose pull || {
+                                    echo "⚠️ Some images failed to pull, continuing..."
+                                }
+                                echo "✅ Images pulled"
+
+                                echo "🚀 Starting services..."
+                                docker compose up -d --force-recreate || {
+                                    echo "❌ Failed to start services"
+                                    docker compose ps
+                                    exit 1
+                                }
+                                echo "✅ Services started successfully"
+                                
+                                echo "📊 Service status:"
+                                docker compose ps
+                                ENDSSH
+                                echo "✅ Deployment completed successfully"
+                                """
+                            } catch (Exception e) {
+                                echo "❌ Deployment failed: ${e.getMessage()}"
+                                error("Deployment failed: ${e.getMessage()}")
+                            }
                         }
                     }
                 }
