@@ -88,11 +88,16 @@ pipeline {
             }
         }
 
-        // ✅ Trivy 스캔 병렬화 및 최적화
+        // ✅ Trivy 스캔 병렬화 및 최적화 (DB는 최신 유지)
         stage('Trivy Security Scan') {
             steps {
                 script {
+                    // Trivy DB를 한 번만 업데이트 (모든 스캔 전에)
+                    echo "🔄 Updating Trivy vulnerability database..."
+                    sh "docker run --rm -v trivy_cache:/root/.cache aquasec/trivy:latest image --download-db-only"
+                    
                     def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
+                    // DB 업데이트는 이미 했으므로 --skip-db-update 사용 (빠른 스캔)
                     def TRIVY_OPTIONS = "--exit-code 0 --severity HIGH,CRITICAL --timeout 5m --no-progress --skip-db-update --cache-dir /root/.cache/trivy ${SKIP_CACHE_FILES}"
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
