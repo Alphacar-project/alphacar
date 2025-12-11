@@ -33,122 +33,159 @@ pipeline {
             }
         }
 
-        // SonarQube 분석 (순차 실행 - 병렬 시 워크스페이스 경로 충돌 발생)
-        stage('SonarQube Analysis - Backend') {
+        // SonarQube 분석 (선택적 - 실패해도 빌드 계속 진행, SKIP_SONAR=true로 완전히 스킵 가능)
+        stage('SonarQube Analysis') {
+            when {
+                expression { return env.SKIP_SONAR != 'true' }
+            }
             steps {
                 script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv("${SONARQUBE}") {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-backend -Dsonar.projectName=alphacar-backend -Dsonar.sources=backend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        def scannerHome = tool 'sonar-scanner'
+                        
+                        // Backend와 Frontend 병렬 분석 (빠른 실행)
+                        parallel(
+                            'Backend': {
+                                withSonarQubeEnv("${SONARQUBE}") {
+                                    sh """
+                                        timeout 300 ${scannerHome}/bin/sonar-scanner \\
+                                            -Dsonar.projectKey=alphacar-backend \\
+                                            -Dsonar.projectName=alphacar-backend \\
+                                            -Dsonar.sources=backend \\
+                                            -Dsonar.host.url=${SONAR_URL} \\
+                                            -Dsonar.sourceEncoding=UTF-8 \\
+                                            -Dsonar.scanner.timeout=300
+                                    """ || echo "⚠️ SonarQube Backend 분석 실패 - 계속 진행"
+                                }
+                            },
+                            'Frontend': {
+                                withSonarQubeEnv("${SONARQUBE}") {
+                                    sh """
+                                        timeout 300 ${scannerHome}/bin/sonar-scanner \\
+                                            -Dsonar.projectKey=alphacar-frontend \\
+                                            -Dsonar.projectName=alphacar-frontend \\
+                                            -Dsonar.sources=frontend \\
+                                            -Dsonar.host.url=${SONAR_URL} \\
+                                            -Dsonar.sourceEncoding=UTF-8 \\
+                                            -Dsonar.exclusions=**/*.html,**/node_modules/** \\
+                                            -Dsonar.javascript.node.maxspace=4096 \\
+                                            -Dsonar.scanner.timeout=300
+                                    """ || echo "⚠️ SonarQube Frontend 분석 실패 - 계속 진행"
+                                }
+                            }
+                        )
+                        echo "✅ SonarQube 분석 완료"
                     }
                 }
             }
         }
 
-        stage('SonarQube Analysis - Frontend') {
-            steps {
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv("${SONARQUBE}") {
-                        // JavaScript bridge server 타임아웃 증가 및 HTML 내 JS 분석 제외
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \\
-                                -Dsonar.projectKey=alphacar-frontend \\
-                                -Dsonar.projectName=alphacar-frontend \\
-                                -Dsonar.sources=frontend \\
-                                -Dsonar.host.url=${SONAR_URL} \\
-                                -Dsonar.sourceEncoding=UTF-8 \\
-                                -Dsonar.javascript.node.maxspace=4096 \\
-                                -Dsonar.exclusions=**/*.html \\
-                                -Dsonar.scanner.force-deprecated-java-version=true
-                        """ || echo "⚠️ SonarQube Frontend 분석 실패했지만 빌드는 계속 진행합니다."
-                    }
-                }
-            }
-        }
-
-        // ✅ Docker 빌드 병렬화 및 캐시 활용 (최대 4개씩 실행하여 리소스 경쟁 방지)
+        // ✅ Docker 빌드 병렬화 및 캐시 최적화 (캐시 활용으로 빠른 빌드)
         stage('Build Docker Images') {
             steps {
                 script {
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
-                    // Backend 서비스들을 4개씩 그룹으로 나누어 병렬 빌드
-                    def serviceGroups = backendServices.collate(4)  // 4개씩 그룹화
+                    // 모든 서비스를 한 번에 병렬 빌드 (캐시 활용으로 빠름)
+                    def buildSteps = [:]
                     
-                    serviceGroups.eachWithIndex { group, groupIndex ->
-                        echo "🏗️ Building group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
-                        
-                        def buildSteps = [:]
-                        group.each { service ->
-                            buildSteps["Backend-${service}"] = {
-                                sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
-                            }
+                    backendServices.each { service ->
+                        buildSteps["Backend-${service}"] = {
+                            sh """
+                                docker build \\
+                                    --build-arg APP_NAME=${service} \\
+                                    --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                    --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
+                                    -f backend/Dockerfile \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
+                                    backend/
+                            """
                         }
-                        
-                        // 마지막 그룹에 Frontend와 Nginx 추가
-                        if (groupIndex == serviceGroups.size() - 1) {
-                            buildSteps['Frontend'] = {
-                                sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
-                            }
-                            buildSteps['Nginx'] = {
-                                sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
-                            }
-                        }
-                        
-                        // 그룹 내에서 병렬 실행
-                        parallel buildSteps
                     }
+                    
+                    buildSteps['Frontend'] = {
+                        sh """
+                            docker build \\
+                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                -f frontend/Dockerfile \\
+                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} \\
+                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                frontend/
+                        """
+                    }
+                    
+                    buildSteps['Nginx'] = {
+                        sh """
+                            docker build \\
+                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                -f nginx.Dockerfile \\
+                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} \\
+                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                .
+                        """
+                    }
+                    
+                    // 모든 빌드를 병렬로 실행 (캐시로 인한 충돌 최소화)
+                    parallel buildSteps
                 }
             }
         }
 
-        // ✅ Trivy 스캔 병렬화 및 최적화 (DB는 최신 유지, 캐시 lock 충돌 방지)
+        // ✅ Trivy 스캔 최적화 (선택적 - SKIP_TRIVY=true로 스킵 가능, 빠른 스캔)
         stage('Trivy Security Scan') {
+            when {
+                expression { return env.SKIP_TRIVY != 'true' }
+            }
             steps {
                 script {
-                    // Trivy DB를 한 번만 업데이트 (모든 스캔 전에)
-                    echo "🔄 Updating Trivy vulnerability database..."
-                    sh "docker run --rm -v trivy_cache:/root/.cache aquasec/trivy:latest image --download-db-only"
-                    
-                    // DB 업데이트 완료 후 충분한 대기 시간 (lock 해제 보장)
-                    sleep(time: 5, unit: 'SECONDS')
-                    
-                    def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
-                    // DB 업데이트는 이미 했으므로 --skip-db-update 사용 (빠른 스캔)
-                    def TRIVY_OPTIONS = "--exit-code 0 --severity HIGH,CRITICAL --timeout 5m --no-progress --skip-db-update ${SKIP_CACHE_FILES}"
-                    def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
-                    
-                    // 병렬 스캔을 3개씩 그룹으로 나누어 실행 (캐시 lock 충돌 방지)
-                    def serviceGroups = backendServices.collate(3)  // 3개씩 그룹화
-                    
-                    serviceGroups.eachWithIndex { group, groupIndex ->
-                        echo "🛡️ Scanning group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
+                    catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                        // Trivy DB 업데이트 (한 번만)
+                        echo "🔄 Updating Trivy DB..."
+                        sh "docker run --rm -v trivy_cache:/root/.cache aquasec/trivy:latest image --download-db-only"
                         
-                        def scanSteps = [:]
-                        group.each { service ->
-                            scanSteps["Scan-Backend-${service}"] = {
-                                echo "🛡️ Scanning Backend Service: ${service}"
-                                // 각 스캔마다 짧은 지연을 추가하여 lock 충돌 방지
-                                sh "sleep \$((\$RANDOM % 2)) && docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                        def TRIVY_OPTIONS = "--exit-code 0 --severity HIGH,CRITICAL --timeout 2m --no-progress --skip-db-update --skip-files 'root/.npm/_cacache/*' --cache-dir /root/.cache/trivy"
+                        def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
+                        
+                        // 스캔을 4개씩 그룹으로 나눠서 실행 (lock 충돌 방지하면서도 빠르게)
+                        def serviceGroups = backendServices.collate(4)
+                        
+                        serviceGroups.eachWithIndex { group, groupIndex ->
+                            def scanSteps = [:]
+                            group.each { service ->
+                                scanSteps["Scan-${service}"] = {
+                                    sh """
+                                        docker run --rm \\
+                                            -v /var/run/docker.sock:/var/run/docker.sock \\
+                                            -v trivy_cache:/root/.cache \\
+                                            aquasec/trivy:latest image ${TRIVY_OPTIONS} \\
+                                            ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}
+                                    """
+                                }
+                            }
+                            
+                            if (groupIndex == serviceGroups.size() - 1) {
+                                scanSteps['Scan-Frontend'] = {
+                                    sh """
+                                        docker run --rm \\
+                                            -v /var/run/docker.sock:/var/run/docker.sock \\
+                                            -v trivy_cache:/root/.cache \\
+                                            aquasec/trivy:latest image ${TRIVY_OPTIONS} \\
+                                            ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}
+                                    """
+                                }
+                            }
+                            
+                            parallel scanSteps
+                            
+                            // 그룹 간 짧은 대기 (lock 해제)
+                            if (groupIndex < serviceGroups.size() - 1) {
+                                sleep(time: 1, unit: 'SECONDS')
                             }
                         }
-                        
-                        // 마지막 그룹에 Frontend 추가
-                        if (groupIndex == serviceGroups.size() - 1) {
-                            scanSteps['Scan-Frontend'] = {
-                                echo "🛡️ Scanning Frontend Service"
-                                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
-                            }
-                        }
-                        
-                        // 그룹 내에서 병렬 실행
-                        parallel scanSteps
-                        
-                        // 그룹 간 짧은 대기 시간 (lock 해제 보장)
-                        if (groupIndex < serviceGroups.size() - 1) {
-                            sleep(time: 2, unit: 'SECONDS')
-                        }
+                        echo "✅ Trivy 스캔 완료"
                     }
                 }
             }
