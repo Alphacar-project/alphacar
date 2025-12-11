@@ -1,3 +1,4 @@
+cat <<EOF > Jenkinsfile.Release
 pipeline {
     agent any
 
@@ -22,7 +23,7 @@ pipeline {
     stages {
         stage('Initialize') {
             steps {
-                echo "Deploying version: ${IMAGE_TAG}"
+                echo "Deploying version: \${IMAGE_TAG}"
                 sh 'docker system prune -f'
             }
         }
@@ -32,7 +33,7 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKER_CRED_ID, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                         // 수정됨: IP만 가지고 로그인 (성공!)
-                        sh "echo $PASS | docker login ${REGISTRY_HOST} -u $USER --password-stdin"
+                        sh "echo \$PASS | docker login \${REGISTRY_HOST} -u \$USER --password-stdin"
                     }
                 }
             }
@@ -42,11 +43,11 @@ pipeline {
             steps {
                 script {
                     // 수정됨: IP + 프로젝트명 + 이미지명 조합
-                    def imgName = "${REGISTRY_HOST}/${HARBOR_PROJECT}/alphacar-frontend:${IMAGE_TAG}"
-                    echo "Building Frontend: ${imgName}"
+                    def imgName = "\${REGISTRY_HOST}/\${HARBOR_PROJECT}/alphacar-frontend:\${IMAGE_TAG}"
+                    echo "Building Frontend: \${imgName}"
                     
-                    sh "docker build -t ${imgName} -f frontend/Dockerfile frontend/"
-                    sh "docker push ${imgName}"
+                    sh "docker build -t \${imgName} -f frontend/Dockerfile frontend/"
+                    sh "docker push \${imgName}"
                 }
             }
         }
@@ -58,11 +59,11 @@ pipeline {
                     
                     services.each { service ->
                         // 수정됨: IP + 프로젝트명 + 이미지명 조합
-                        def imgName = "${REGISTRY_HOST}/${HARBOR_PROJECT}/alphacar-${service}:${IMAGE_TAG}"
-                        echo "Building Backend [${service}]: ${imgName}"
+                        def imgName = "\${REGISTRY_HOST}/\${HARBOR_PROJECT}/alphacar-\${service}:\${IMAGE_TAG}"
+                        echo "Building Backend [\${service}]: \${imgName}"
                         
-                        sh "docker build --build-arg APP_NAME=${service} -t ${imgName} -f backend/Dockerfile backend/"
-                        sh "docker push ${imgName}"
+                        sh "docker build --build-arg APP_NAME=\${service} -t \${imgName} -f backend/Dockerfile backend/"
+                        sh "docker push \${imgName}"
                     }
                 }
             }
@@ -70,16 +71,13 @@ pipeline {
 
         stage('Deploy to Server') {
             steps {
-                sshagent(credentials: ["${SSH_CRED_ID}"]) {
+                sshagent(credentials: ["\${SSH_CRED_ID}"]) {
                     // 수정됨: DEPLOY_SERVER_IP (192.168.0.160)으로 접속하도록 변경
                     sh """
-                        ssh -o StrictHostKeyChecking=no kevin@${DEPLOY_SERVER_IP} '
+                        ssh -o StrictHostKeyChecking=no kevin@\${DEPLOY_SERVER_IP} '
                             cd ~/alphacar/deploy &&
-                            export FRONTEND_VERSION=${IMAGE_TAG} &&
-                            export BACKEND_VERSION=${IMAGE_TAG} &&
-                            
-                            # 서버에서도 하버 로그인이 필요할 수 있음 (이미지 당겨오기 위해)
-                            # (서버에 ~/.docker/config.json이 있다면 생략 가능하지만 안전하게 추가 권장)
+                            export FRONTEND_VERSION=\${IMAGE_TAG} &&
+                            export BACKEND_VERSION=\${IMAGE_TAG} &&
                             
                             docker compose pull &&
                             docker compose up -d --remove-orphans
@@ -96,3 +94,4 @@ pipeline {
         }
     }
 }
+EOF
