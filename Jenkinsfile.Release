@@ -1,5 +1,7 @@
 cat <<EOF > Jenkinsfile.Release
 pipeline {
+:%s@sh "echo \\$PASS | docker login \\$\\{REGISTRY_HOST\\} -u \\$USER --password-stdin"@sh 'echo "$PASS" | docker login ' + "${env.REGISTRY_HOST}" + ' -u $USER --password-stdin'@g
+
     agent any
 
     environment {
