@@ -97,13 +97,21 @@ pipeline {
                         group.each { service ->
                             buildSteps["Backend-${service}"] = {
                                 sh """
+                                    # 캐시 이미지 pull 시도 (실패해도 계속 진행)
+                                    docker pull ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest || true
                                     docker build \\
                                         --build-arg APP_NAME=${service} \\
                                         --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
                                         -f backend/Dockerfile \\
                                         -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} \\
                                         -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
-                                        backend/
+                                        backend/ || (echo "Build failed, retrying without cache" && \\
+                                        docker build \\
+                                        --build-arg APP_NAME=${service} \\
+                                        -f backend/Dockerfile \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
+                                        backend/)
                                 """
                             }
                         }
