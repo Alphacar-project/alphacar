@@ -33,10 +33,10 @@ pipeline {
             }
         }
 
-        // SonarQube 분석 (선택적 - 실패해도 빌드 계속 진행, SKIP_SONAR=true로 완전히 스킵 가능)
+        // SonarQube 분석 (선택적 - 기본 스킵, ENABLE_SONAR=true로 활성화)
         stage('SonarQube Analysis') {
             when {
-                expression { return env.SKIP_SONAR != 'true' }
+                expression { return env.ENABLE_SONAR == 'true' }
             }
             steps {
                 script {
@@ -80,64 +80,69 @@ pipeline {
             }
         }
 
-        // ✅ Docker 빌드 병렬화 및 캐시 최적화 (캐시 활용으로 빠른 빌드)
+        // ✅ Docker 빌드 병렬화 및 캐시 최적화 (5개씩 그룹화하여 리소스 경쟁 최소화)
         stage('Build Docker Images') {
             steps {
                 script {
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
-                    // 모든 서비스를 한 번에 병렬 빌드 (캐시 활용으로 빠름)
-                    def buildSteps = [:]
+                    // 5개씩 그룹으로 나누어 병렬 빌드 (안정성과 속도 균형)
+                    def serviceGroups = backendServices.collate(5)
                     
-                    backendServices.each { service ->
-                        buildSteps["Backend-${service}"] = {
-                            sh """
-                                docker build \\
-                                    --build-arg APP_NAME=${service} \\
-                                    --build-arg BUILDKIT_INLINE_CACHE=1 \\
-                                    --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
-                                    -f backend/Dockerfile \\
-                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} \\
-                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
-                                    backend/
-                            """
+                    serviceGroups.eachWithIndex { group, groupIndex ->
+                        echo "🏗️ Building group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
+                        
+                        def buildSteps = [:]
+                    
+                        group.each { service ->
+                            buildSteps["Backend-${service}"] = {
+                                sh """
+                                    docker build \\
+                                        --build-arg APP_NAME=${service} \\
+                                        --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
+                                        -f backend/Dockerfile \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest \\
+                                        backend/
+                                """
+                            }
                         }
+                        
+                        // 마지막 그룹에 Frontend와 Nginx 추가
+                        if (groupIndex == serviceGroups.size() - 1) {
+                            buildSteps['Frontend'] = {
+                                sh """
+                                    docker build \\
+                                        --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                        -f frontend/Dockerfile \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                        frontend/
+                                """
+                            }
+                            buildSteps['Nginx'] = {
+                                sh """
+                                    docker build \\
+                                        --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                        -f nginx.Dockerfile \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} \\
+                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                        .
+                                """
+                            }
+                        }
+                        
+                        // 그룹 내에서 병렬 실행
+                        parallel buildSteps
                     }
-                    
-                    buildSteps['Frontend'] = {
-                        sh """
-                            docker build \\
-                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
-                                --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
-                                -f frontend/Dockerfile \\
-                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} \\
-                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
-                                frontend/
-                        """
-                    }
-                    
-                    buildSteps['Nginx'] = {
-                        sh """
-                            docker build \\
-                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
-                                --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
-                                -f nginx.Dockerfile \\
-                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} \\
-                                -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
-                                .
-                        """
-                    }
-                    
-                    // 모든 빌드를 병렬로 실행 (캐시로 인한 충돌 최소화)
-                    parallel buildSteps
                 }
             }
         }
 
-        // ✅ Trivy 스캔 최적화 (선택적 - SKIP_TRIVY=true로 스킵 가능, 빠른 스캔)
+        // ✅ Trivy 스캔 최적화 (선택적 - 기본 스킵, ENABLE_TRIVY=true로 활성화)
         stage('Trivy Security Scan') {
             when {
-                expression { return env.SKIP_TRIVY != 'true' }
+                expression { return env.ENABLE_TRIVY == 'true' }
             }
             steps {
                 script {

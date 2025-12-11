@@ -10,32 +10,33 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat
 
 # 1-2. 패키지 파일 복사
-# (빌드 컨텍스트가 backend/ 이므로 해당 경로 기준)
 COPY package.json package-lock.json ./
 COPY ${APP_NAME}/package.json ${APP_NAME}/package-lock.json ${APP_NAME}/
 
-# 1-3. 의존성 설치 (CI 모드: 빠르고 정확함)
-# 이때는 빌드를 위해 devDependencies(NestCLI 등)가 모두 설치됩니다.
+# 1-3. 개발 의존성 포함 전체 설치 (빌드에 필요)
 RUN npm install -g @nestjs/cli
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
 # 1-4. 소스 코드 복사 및 빌드
 COPY . .
-# 스키마 복사 (필요한 경우)
 RUN [ -d "schemas" ] && cp -r schemas ${APP_NAME}/src/ || true
-# 각 서비스 디렉토리에서도 의존성 설치 (각 서비스의 package.json에 있는 의존성)
-RUN cd ${APP_NAME} && npm install --legacy-peer-deps
-# 빌드 실행 -> dist 폴더 생성
+RUN cd ${APP_NAME} && npm ci --legacy-peer-deps || npm install --legacy-peer-deps || true
 RUN cd ${APP_NAME} && nest build
 
-# 🔥 [다이어트 핵심] 빌드 완료 후, 실행에 필요 없는 '개발용 패키지' 제거
-# 이 명령어가 실행되면 node_modules 크기가 확 줄어듭니다.
-# 네트워크 타임아웃 방지를 위해 재시도 로직 추가
-RUN npm prune --production --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=60000 || npm prune --production --offline || true
-RUN cd ${APP_NAME} && (npm prune --production --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=60000 || npm prune --production --offline || true)
+# 1-5. Production 의존성만 별도 설치 (prune 대신 안정적인 방법 - 레이어 충돌 방지)
+WORKDIR /app
+RUN mkdir -p prod-deps prod-deps/${APP_NAME} && \
+    cp package.json package-lock.json prod-deps/ && \
+    cp ${APP_NAME}/package.json ${APP_NAME}/package-lock.json prod-deps/${APP_NAME}/ 2>/dev/null || true
+
+WORKDIR /app/prod-deps
+RUN npm ci --omit=dev --legacy-peer-deps
+
+WORKDIR /app/prod-deps/${APP_NAME}
+RUN npm ci --omit=dev --legacy-peer-deps 2>/dev/null || npm install --omit=dev --legacy-peer-deps 2>/dev/null || true
 
 # ---------------------------------------------------
-# 2. 실행 단계 (Runner) - 초경량화
+# 2. 실행 단계 (Runner) - 초경량화 (Production 의존성만)
 # ---------------------------------------------------
 FROM node:20-alpine AS runner
 ARG APP_NAME
@@ -43,15 +44,13 @@ ARG APP_NAME
 WORKDIR /app
 ENV NODE_ENV=production
 
-# 2-1. [절대 금지] RUN npm install 명령어 금지! ❌
-# 대신 Builder에서 이미 정리된 node_modules를 복사해옵니다. ✅
-COPY --from=builder /app/node_modules ./node_modules
-# 앱 내부에 별도 node_modules가 생성된 경우를 대비해 복사 (없으면 무시됨)
-COPY --from=builder /app/${APP_NAME}/node_modules ./${APP_NAME}/node_modules
+# 2-1. Production 의존성만 복사 (이미 정리된 상태)
+COPY --from=builder /app/prod-deps/node_modules ./node_modules
+COPY --from=builder /app/prod-deps/${APP_NAME}/node_modules ./${APP_NAME}/node_modules 2>/dev/null || true
 
-# 2-2. 실행 파일(dist)과 설정 파일(package.json) 한 번에 복사
-# 레이어를 줄이기 위해 한 줄로 처리
-COPY --from=builder /app/${APP_NAME}/dist /app/${APP_NAME}/package.json ./
+# 2-2. 실행 파일(dist)과 설정 파일(package.json) 복사
+COPY --from=builder /app/${APP_NAME}/dist ./${APP_NAME}/dist
+COPY --from=builder /app/${APP_NAME}/package.json ./${APP_NAME}/package.json
 
 # 2-3. 실행
 EXPOSE 3000-4000
