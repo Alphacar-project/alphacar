@@ -12,33 +12,52 @@ RUN apk add --no-cache libc6-compat
 # 1-2. 패키지 파일 복사
 COPY package.json package-lock.json ./
 COPY ${APP_NAME}/package.json ${APP_NAME}/
+# package-lock.json 복사 (있을 경우)
+RUN if [ -f ${APP_NAME}/package-lock.json ]; then cp ${APP_NAME}/package-lock.json ${APP_NAME}/; fi || true
 
-# 1-3. 개발 의존성 포함 전체 설치 (빌드에 필요)
+# 1-3. npm 캐시 정리 및 개발 의존성 포함 전체 설치 (빌드에 필요)
+RUN npm cache clean --force || true
 RUN npm install -g @nestjs/cli
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --cache /tmp/.npm
 
 # 1-4. 소스 코드 복사 및 빌드
 COPY . .
 RUN [ -d "schemas" ] && cp -r schemas ${APP_NAME}/src/ || true
-RUN cd ${APP_NAME} && npm ci --legacy-peer-deps || npm install --legacy-peer-deps || true
+# 서비스별 의존성 설치 (package-lock.json이 있으면 ci, 없으면 install)
+RUN cd ${APP_NAME} && \
+    if [ -f package-lock.json ]; then \
+        npm ci --legacy-peer-deps --cache /tmp/.npm || npm install --legacy-peer-deps --cache /tmp/.npm || true; \
+    else \
+        npm install --legacy-peer-deps --cache /tmp/.npm || true; \
+    fi
 RUN cd ${APP_NAME} && nest build
 
-# 1-5. Production 의존성만 별도 설치 (prune 대신 안정적인 방법 - 레이어 충돌 방지)
+# 1-5. Production 의존성만 별도 설치 (안정적이고 빠른 방법)
 WORKDIR /app
-RUN mkdir -p prod-deps prod-deps/${APP_NAME} && \
-    cp package.json package-lock.json prod-deps/ && \
-    cp ${APP_NAME}/package.json prod-deps/${APP_NAME}/ && \
-    (cp ${APP_NAME}/package-lock.json prod-deps/${APP_NAME}/ 2>/dev/null || true)
+RUN mkdir -p prod-deps
+COPY package.json package-lock.json prod-deps/
+# 서비스별 package.json만 복사 (lock은 선택적)
+COPY ${APP_NAME}/package.json prod-deps/${APP_NAME}/
+RUN if [ -f ${APP_NAME}/package-lock.json ]; then cp ${APP_NAME}/package-lock.json prod-deps/${APP_NAME}/; fi || true
 
 WORKDIR /app/prod-deps
-RUN npm ci --omit=dev --legacy-peer-deps
+# Production 의존성만 설치 (devDependencies 제외)
+RUN npm ci --omit=dev --legacy-peer-deps --cache /tmp/.npm
 
+# 서비스별 production 의존성 (있을 경우만)
 WORKDIR /app/prod-deps/${APP_NAME}
-RUN if [ -f package-lock.json ]; then \
-        npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps || true; \
-    else \
-        npm install --omit=dev --legacy-peer-deps --package-lock-only || npm install --omit=dev --legacy-peer-deps || true; \
+RUN if [ -f package.json ]; then \
+        if [ -f package-lock.json ]; then \
+            npm ci --omit=dev --legacy-peer-deps --cache /tmp/.npm || npm install --omit=dev --legacy-peer-deps --cache /tmp/.npm || true; \
+        else \
+            npm install --omit=dev --legacy-peer-deps --cache /tmp/.npm || true; \
+        fi; \
     fi
+
+# 1-6. npm 캐시 정리 (이미지 크기 절감)
+RUN npm cache clean --force || true
+WORKDIR /app
+RUN rm -rf /tmp/.npm || true
 
 # ---------------------------------------------------
 # 2. 실행 단계 (Runner) - 초경량화 (Production 의존성만)
@@ -49,16 +68,24 @@ ARG APP_NAME
 WORKDIR /app
 ENV NODE_ENV=production
 
-# 2-1. Production 의존성만 복사 (이미 정리된 상태)
+# 2-1. Production 의존성만 복사 (devDependencies 제외)
 COPY --from=builder /app/prod-deps/node_modules ./node_modules
-# 서비스별 node_modules 복사 (빌드 단계에서 생성됨)
-RUN mkdir -p ${APP_NAME}
-COPY --from=builder /app/prod-deps/${APP_NAME}/node_modules ./${APP_NAME}/node_modules
 
-# 2-2. 실행 파일(dist)과 설정 파일(package.json) 복사
+# 2-2. 서비스별 node_modules 복사 (있을 경우만)
+# 먼저 임시 위치로 복사 후 존재 여부 확인
+RUN mkdir -p /tmp/service-deps/${APP_NAME}
+COPY --from=builder /app/prod-deps/${APP_NAME}/ /tmp/service-deps/${APP_NAME}/ || true
+RUN mkdir -p ${APP_NAME} && \
+    if [ -d /tmp/service-deps/${APP_NAME}/node_modules ]; then \
+        cp -r /tmp/service-deps/${APP_NAME}/node_modules ./${APP_NAME}/; \
+    fi && \
+    rm -rf /tmp/service-deps
+
+# 2-3. 빌드된 실행 파일 복사 (dist 폴더)
 COPY --from=builder /app/${APP_NAME}/dist ./${APP_NAME}/dist
 COPY --from=builder /app/${APP_NAME}/package.json ./${APP_NAME}/package.json
 
-# 2-3. 실행
+# 2-4. 실행 경로 확인 및 실행
+# nest build 결과물은 보통 dist/src/main.js 또는 dist/main.js에 생성됨
 EXPOSE 3000-4000
-CMD ["sh", "-c", "node $(find . -name main.js | head -n 1)"]
+CMD ["sh", "-c", "NODE_PATH=/app/node_modules:/app/${APP_NAME}/node_modules node $(find ./${APP_NAME}/dist -name 'main.js' -type f | head -n 1)"]
