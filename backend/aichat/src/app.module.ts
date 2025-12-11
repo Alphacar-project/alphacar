@@ -1,12 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ChatModule } from './chat/chat.module';
-import { AuthModule } from './auth/auth.module';
-import { User } from './entities/user.entity';
 
 @Module({
   imports: [
@@ -19,23 +16,6 @@ import { User } from './entities/user.entity';
       }),
       inject: [ConfigService],
     }),
-    // MariaDB 연결 (사용자 인증용)
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (config: ConfigService) => ({
-        type: 'mariadb',
-        host: config.get<string>('MARIADB_HOST') || '211.46.52.151',
-        port: config.get<number>('MARIADB_PORT') || 15432,
-        username: config.get<string>('MARIADB_USER') || 'team1',
-        password: config.get<string>('MARIADB_PASS') || 'Gkrtod1@',
-        database: config.get<string>('MARIADB_DB_NAME') || 'team1',
-        entities: [User],
-        synchronize: false, // 프로덕션에서는 false
-        logging: false,
-      }),
-      inject: [ConfigService],
-    }),
-    AuthModule,
     ChatModule,
   ],
   controllers: [AppController],

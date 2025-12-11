@@ -9,7 +9,6 @@ import { BedrockEmbeddings } from '@langchain/aws';
 import { FaissStore } from '@langchain/community/vectorstores/faiss';
 import { Document } from '@langchain/core/documents';
 import * as fs from 'fs';
-import { UserService } from '../auth/user.service';
 
 @Injectable()
 export class ChatService implements OnModuleInit {
@@ -20,7 +19,6 @@ export class ChatService implements OnModuleInit {
 
   constructor(
     private configService: ConfigService,
-    private userService: UserService,
   ) {}
 
   async onModuleInit() {
@@ -81,13 +79,10 @@ export class ChatService implements OnModuleInit {
   // [이미지 채팅]
   // =================================================================================
 
-  async chatWithImage(imageBuffer: Buffer, mimeType: string = 'image/jpeg', socialId?: string) {
+  async chatWithImage(imageBuffer: Buffer, mimeType: string = 'image/jpeg') {
     console.log("📸 Image received, analyzing with Llama 3.2 Vision...");
 
     try {
-      // 사용자 이름 가져오기 (socialId 기반)
-      const userName = socialId ? await this.userService.getUserNameBySocialId(socialId) : '고객님';
-
       // 1. 차종 식별
       let identifiedCarName = await this.identifyCarWithLlama(imageBuffer, mimeType);
       
@@ -101,7 +96,7 @@ export class ChatService implements OnModuleInit {
       // ★ [수정] 실패 조건 강화 (빈 문자열, null, undefined, NOT_CAR 모두 차단)
       if (!identifiedCarName || identifiedCarName === 'NOT_CAR' || identifiedCarName.length < 2) {
         return {
-            response: `${userName}님, 죄송합니다. 사진에서 자동차를 명확하게 식별하지 못했습니다. 차량이 더 잘 보이는 사진으로 다시 시도해 주세요.`,
+            response: "죄송합니다. 사진에서 자동차를 명확하게 식별하지 못했습니다. 차량이 더 잘 보이는 사진으로 다시 시도해 주세요.",
             context_used: [],
             identified_car: null
         };
@@ -113,7 +108,7 @@ export class ChatService implements OnModuleInit {
       // ★ [추가] 검색 결과가 없을 경우 예외 처리
       if (!results || results.length === 0) {
           return {
-              response: `${userName}님, 죄송합니다. 사진의 차량(${identifiedCarName})과 일치하는 정보를 데이터베이스에서 찾을 수 없습니다.`,
+              response: `죄송합니다. 사진의 차량(${identifiedCarName})과 일치하는 정보를 데이터베이스에서 찾을 수 없습니다.`,
               context_used: [],
               identified_car: identifiedCarName
           };
@@ -122,8 +117,8 @@ export class ChatService implements OnModuleInit {
       const contextText = results.map(doc => doc.pageContent).join("\n");
       const sources = results.map((r) => r.metadata.source);
 
-      // 3. 설명 생성 (사용자 이름 포함)
-      const description = await this.generateCarDescription(identifiedCarName, contextText, userName);
+      // 3. 설명 생성
+      const description = await this.generateCarDescription(identifiedCarName, contextText);
 
       return {
           response: description,
@@ -143,24 +138,24 @@ export class ChatService implements OnModuleInit {
     }
   }
 
-  private async generateCarDescription(carName: string, context: string, userName: string = '고객님'): Promise<string> {
+  private async generateCarDescription(carName: string, context: string): Promise<string> {
         const prompt = `
 <|begin_of_text|><|start_header_id|>system<|end_header_id|>
 You are an AI Automotive Expert at 'AlphaCar'.
-${userName}님이 업로드하신 사진이 **'${carName}'**로 식별되었습니다.
+업로드하신 사진이 **'${carName}'**로 식별되었습니다.
 
-Your goal is to explain this vehicle to ${userName}님 based **ONLY** on the provided [Context] from our vector store.
+Your goal is to explain this vehicle based **ONLY** on the provided [Context] from our vector store.
 
 [INSTRUCTIONS]
 1. **Source of Truth**: You MUST answer based solely on the [Context]. Do not use external training data.
 2. **Structure**:
-   - **Introduction**: "${userName}님이 업로드하신 사진은 **${carName}**입니다."
+   - **Introduction**: "업로드하신 사진은 **${carName}**입니다."
    - **Image Display (CRITICAL)**: You MUST display the car image from the context.
    - **Key Features**: Summarize 3 key selling points.
    - **Specs**: Mention price range or fuel efficiency.
    - **Call to Action**: Encourage checking the detailed quote.
 3. **Language**: Output in **Korean (Hangul)**.
-4. **Personalization**: Always address the user as "${userName}님" in a friendly, professional manner.
+4. **Personalization**: Always address the user in a friendly, professional manner.
 
 [IMAGE RENDERING & LINKING LOGIC - STRICT]
 - The user MUST be able to click the image to see the quote.
@@ -177,7 +172,7 @@ Your goal is to explain this vehicle to ${userName}님 based **ONLY** on the pro
 ${context}
 
 <|eot_id|><|start_header_id|>user<|end_header_id|>
-${userName}님, 이 차에 대해 우리 데이터베이스를 기반으로 자세히 설명해주고, 견적을 볼 수 있게 사진에 링크를 걸어줘.
+이 차에 대해 우리 데이터베이스를 기반으로 자세히 설명해주고, 견적을 볼 수 있게 사진에 링크를 걸어줘.
 <|eot_id|><|start_header_id|>assistant<|end_header_id|>
 `;
 
@@ -400,10 +395,7 @@ Analyze this vehicle image with EXTREME PRECISION. Follow the systematic process
 
   // =================================================================================
 
-  async chat(userMessage: string, socialId?: string) {
-    // 사용자 이름 가져오기 (socialId 기반)
-    const userName = socialId ? await this.userService.getUserNameBySocialId(socialId) : '고객님';
-
+  async chat(userMessage: string) {
     let results = await this.vectorStore.similaritySearch(userMessage, 20);
 
     const context = results.map((r) => r.pageContent).join('\n\n');
@@ -417,13 +409,12 @@ Analyze this vehicle image with EXTREME PRECISION. Follow the systematic process
 
     let systemPrompt = `
     You are the AI Automotive Specialist for 'AlphaCar'.
-    You are currently helping ${userName}님.
 
     [CORE RULES]
     1. **LANGUAGE**: Answer strictly in **Korean (Hangul)**.
     2. **GROUNDING**: Answer SOLELY based on the provided [Context].
     3. **GUARDRAIL**: Reject non-automotive topics.
-    4. **PERSONALIZATION**: Always address the user as "${userName}님" in a friendly, professional manner.
+    4. **PERSONALIZATION**: Always address the user in a friendly, professional manner.
 
     [IMAGE RENDERING & LINKING LOGIC - CRITICAL]
     - If the context contains 'ImageURL' and 'BaseTrimId' for the suggested car, you **MUST** display the image wrapped in a link.
@@ -438,10 +429,9 @@ Analyze this vehicle image with EXTREME PRECISION. Follow the systematic process
       4. Combine them into the Markdown link above. Replace '..._값' placeholders with the actual values found in the context.
 
     [RESPONSE STRATEGY - CRITICAL]
-    - **MANDATORY**: You MUST start your response with "${userName}님, " (e.g., "${userName}님, 현대 쏘나타는...")
     - Act like a friendly, professional car dealer.
-    - Always address the user as "${userName}님" throughout your response.
-    - End with a follow-up question addressing "${userName}님".
+    - Always address the user in a friendly manner throughout your response.
+    - End with a follow-up question.
 
     ${isComparisonQuery ? `
     [COMPARISON MODE]
@@ -457,12 +447,9 @@ Analyze this vehicle image with EXTREME PRECISION. Follow the systematic process
     const guardrailId = this.configService.get<string>('BEDROCK_GUARDRAIL_ID');
     const guardrailVersion = this.configService.get<string>('BEDROCK_GUARDRAIL_VERSION') || 'DRAFT';
 
-    // 사용자 메시지에 사용자 이름 포함 (더 명확하게)
-    const userMessageWithName = `${userName}님이 질문하신 내용: ${userMessage}`;
-
     const input: ConverseCommandInput = {
       modelId: 'us.meta.llama3-3-70b-instruct-v1:0',
-      messages: [{ role: 'user', content: [{ text: userMessageWithName }] }],
+      messages: [{ role: 'user', content: [{ text: userMessage }] }],
       system: [{ text: systemPrompt }],
       inferenceConfig: { maxTokens: 2048, temperature: 0.2 },
     };
@@ -483,12 +470,7 @@ Analyze this vehicle image with EXTREME PRECISION. Follow the systematic process
           return { response: "🚫 죄송합니다. 그 질문은 답변할 수 없습니다.", context_used: [] };
       }
 
-      let outputText = response.output?.message?.content?.[0]?.text || '';
-      
-      // 응답 시작 부분에 사용자 이름이 없으면 추가
-      if (outputText && !outputText.trim().startsWith(`${userName}님`)) {
-        outputText = `${userName}님, ${outputText.trim()}`;
-      }
+      const outputText = response.output?.message?.content?.[0]?.text || '';
       
       return { response: outputText, context_used: sources };
 

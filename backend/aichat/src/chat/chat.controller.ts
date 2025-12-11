@@ -7,9 +7,7 @@ import {
   UseInterceptors, 
   ParseFilePipeBuilder, 
   HttpStatus,
-  BadRequestException,
-  Headers,
-  UnauthorizedException
+  BadRequestException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ChatService } from './chat.service';
@@ -21,14 +19,8 @@ export class ChatController {
 
   // 1. [기존] 텍스트 질문하기
   @Post('ask')
-  async ask(
-    @Body('message') message: string,
-    @Headers('x-social-id') socialId?: string
-  ) {
-    if (!socialId) {
-      throw new UnauthorizedException('로그인이 필요합니다. 먼저 로그인해주세요.');
-    }
-    return this.chatService.chat(message, socialId);
+  async ask(@Body('message') message: string) {
+    return this.chatService.chat(message);
   }
 
   // 2. [추가] 이미지 업로드 및 분석 요청
@@ -73,19 +65,14 @@ export class ChatController {
           },
         }),
     )
-    file: Express.Multer.File,
-    @Headers('x-social-id') socialId?: string
+    file: Express.Multer.File
   ) {
     if (!file) {
       throw new BadRequestException('이미지 파일이 제공되지 않았습니다.');
     }
     
-    if (!socialId) {
-      throw new UnauthorizedException('로그인이 필요합니다. 먼저 로그인해주세요.');
-    }
-    
     // ChatService의 이미지 처리 메서드 호출
-    return this.chatService.chatWithImage(file.buffer, file.mimetype, socialId);
+    return this.chatService.chatWithImage(file.buffer, file.mimetype);
   }
 
   // 3. [기존] 지식 추가 (테스트용)

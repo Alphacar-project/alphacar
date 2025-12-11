@@ -2,7 +2,7 @@
 "use client";
 
 import SimpleModal from "../../components/SimpleModal"; // ✅ 경로 중요!
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation"; // ✅ useSearchParams 추가
 import Cookies from "js-cookie"; // ✅ js-cookie 추가
 
@@ -506,5 +506,16 @@ export default function MyPageLogin() {
         onCancel={() => setShowWelcomeModal(false)}
       />
     </>
+  );
+}
+
+// -----------------------------------------------------------
+// 4. [핵심] Suspense로 감싸서 내보내기 (빌드 에러 해결!)
+// -----------------------------------------------------------
+export default function MyPageLogin() {
+  return (
+    <Suspense fallback={<div>로그인 페이지 로딩중...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
