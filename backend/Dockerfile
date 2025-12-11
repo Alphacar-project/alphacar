@@ -72,14 +72,13 @@ ENV NODE_ENV=production
 COPY --from=builder /app/prod-deps/node_modules ./node_modules
 
 # 2-2. 서비스별 node_modules 복사 (있을 경우만)
-# 먼저 임시 위치로 복사 후 존재 여부 확인
-RUN mkdir -p /tmp/service-deps/${APP_NAME}
-COPY --from=builder /app/prod-deps/${APP_NAME}/ /tmp/service-deps/${APP_NAME}/ || true
-RUN mkdir -p ${APP_NAME} && \
-    if [ -d /tmp/service-deps/${APP_NAME}/node_modules ]; then \
-        cp -r /tmp/service-deps/${APP_NAME}/node_modules ./${APP_NAME}/; \
-    fi && \
-    rm -rf /tmp/service-deps
+# 서비스별 node_modules는 선택적 (monorepo에서는 루트 node_modules로 충분)
+RUN mkdir -p ${APP_NAME}
+# 빌드 단계의 서비스별 node_modules를 임시로 복사하여 확인
+RUN --mount=from=builder,source=/app/prod-deps/${APP_NAME}/node_modules,target=/tmp/check-node-modules,type=bind \
+    if [ -d /tmp/check-node-modules ]; then \
+        cp -r /tmp/check-node-modules ./${APP_NAME}/node_modules; \
+    fi || echo "No service-specific node_modules, using root node_modules only"
 
 # 2-3. 빌드된 실행 파일 복사 (dist 폴더)
 COPY --from=builder /app/${APP_NAME}/dist ./${APP_NAME}/dist
