@@ -33,80 +33,122 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis - Backend') {
-            steps {
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv("${SONARQUBE}") {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-backend -Dsonar.projectName=alphacar-backend -Dsonar.sources=backend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
+        // ✅ SonarQube 분석 병렬화
+        stage('SonarQube Analysis') {
+            parallel {
+                stage('Backend') {
+                    steps {
+                        script {
+                            def scannerHome = tool 'sonar-scanner'
+                            withSonarQubeEnv("${SONARQUBE}") {
+                                sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-backend -Dsonar.projectName=alphacar-backend -Dsonar.sources=backend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
+                            }
+                        }
+                    }
+                }
+                stage('Frontend') {
+                    steps {
+                        script {
+                            def scannerHome = tool 'sonar-scanner'
+                            withSonarQubeEnv("${SONARQUBE}") {
+                                sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-frontend -Dsonar.projectName=alphacar-frontend -Dsonar.sources=frontend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
+                            }
+                        }
                     }
                 }
             }
         }
 
-        stage('SonarQube Analysis - Frontend') {
-            steps {
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv("${SONARQUBE}") {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-frontend -Dsonar.projectName=alphacar-frontend -Dsonar.sources=frontend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
-                    }
-                }
-            }
-        }
-
+        // ✅ Docker 빌드 병렬화 및 캐시 활용
         stage('Build Docker Images') {
             steps {
                 script {
-                    // Backend 서비스 목록 (원하는 서비스 추가/제거)
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
+                    
+                    // 병렬 빌드 맵 생성
+                    def buildSteps = [:]
+                    
+                    // Backend 서비스들 병렬 빌드
                     backendServices.each { service ->
-                        sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
+                        buildSteps["Backend-${service}"] = {
+                            sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
+                        }
                     }
-
-                    // Frontend
-                    sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
-
-                    // Nginx
-                    sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
+                    
+                    // Frontend 병렬 빌드
+                    buildSteps['Frontend'] = {
+                        sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
+                    }
+                    
+                    // Nginx 병렬 빌드
+                    buildSteps['Nginx'] = {
+                        sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
+                    }
+                    
+                    // 모든 빌드를 병렬로 실행
+                    parallel buildSteps
                 }
             }
         }
 
+        // ✅ Trivy 스캔 병렬화
         stage('Trivy Security Scan') {
             steps {
                 script {
                     def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
-
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
+                    
+                    // 병렬 스캔 맵 생성
+                    def scanSteps = [:]
+                    
                     backendServices.each { service ->
-                        echo "🛡️ Scanning Backend Service: ${service}"
-                        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                        scanSteps["Scan-Backend-${service}"] = {
+                            echo "🛡️ Scanning Backend Service: ${service}"
+                            sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                        }
                     }
-
-                    echo "🛡️ Scanning Frontend Service"
-                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+                    
+                    scanSteps['Scan-Frontend'] = {
+                        echo "🛡️ Scanning Frontend Service"
+                        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+                    }
+                    
+                    // 모든 스캔을 병렬로 실행
+                    parallel scanSteps
                 }
             }
         }
 
         stage('Push to Harbor') {
             steps {
-                // harbor-cred는 Jenkins에 username/password로 저장된 자격증명 ID
                 withCredentials([usernamePassword(credentialsId: 'harbor-cred', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     script {
-                        // 안전하게 멀티라인으로 로그인 (변수 치환 정상)
                         sh """
                         echo "\$PASS" | docker login ${HARBOR_URL} -u \$USER --password-stdin
                         """
-
+                        
                         def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
+                        
+                        // ✅ Push도 병렬화
+                        def pushSteps = [:]
+                        
                         backendServices.each { service ->
-                            sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                            pushSteps["Push-Backend-${service}"] = {
+                                sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                            }
                         }
-                        sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
-                        sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION}"
-
+                        
+                        pushSteps['Push-Frontend'] = {
+                            sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+                        }
+                        
+                        pushSteps['Push-Nginx'] = {
+                            sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION}"
+                        }
+                        
+                        // 모든 push를 병렬로 실행
+                        parallel pushSteps
+                        
                         sh "docker logout ${HARBOR_URL}"
                     }
                 }
@@ -115,7 +157,6 @@ pipeline {
 
         stage('Deploy to Server') {
             steps {
-                // ssh-server는 Jenkins에 등록된 SSH credential ID (private key)
                 sshagent(credentials: ['ssh-server']) {
                     withCredentials([file(credentialsId: 'ALPHACAR', variable: 'ENV_FILE_PATH'),
                                      usernamePassword(credentialsId: 'harbor-cred', usernameVariable: 'HB_USER', passwordVariable: 'HB_PASS')]) {
@@ -123,7 +164,6 @@ pipeline {
                             def remoteIP = '192.168.0.160'
                             def remoteUser = 'kevin'
 
-                            // 읽어와 로컬에서 치환해서 원격으로 전송
                             def envContent = readFile(ENV_FILE_PATH).trim()
 
                             sh """
@@ -160,4 +200,3 @@ EOF_ENV
         }
     }
 }
-
