@@ -92,7 +92,7 @@ pipeline {
             }
         }
 
-        // ✅ Trivy 스캔 병렬화 및 최적화 (DB는 최신 유지)
+        // ✅ Trivy 스캔 병렬화 및 최적화 (DB는 최신 유지, 캐시 lock 충돌 방지)
         stage('Trivy Security Scan') {
             steps {
                 script {
@@ -100,33 +100,45 @@ pipeline {
                     echo "🔄 Updating Trivy vulnerability database..."
                     sh "docker run --rm -v trivy_cache:/root/.cache aquasec/trivy:latest image --download-db-only"
                     
-                    // DB 업데이트 완료 후 잠시 대기 (lock 해제 보장)
-                    sleep(time: 2, unit: 'SECONDS')
+                    // DB 업데이트 완료 후 충분한 대기 시간 (lock 해제 보장)
+                    sleep(time: 5, unit: 'SECONDS')
                     
                     def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
                     // DB 업데이트는 이미 했으므로 --skip-db-update 사용 (빠른 스캔)
-                    // 각 병렬 스캔에 고유한 캐시 경로 제공 (lock 충돌 방지)
                     def TRIVY_OPTIONS = "--exit-code 0 --severity HIGH,CRITICAL --timeout 5m --no-progress --skip-db-update ${SKIP_CACHE_FILES}"
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
-                    // 병렬 스캔 맵 생성
-                    def scanSteps = [:]
+                    // 병렬 스캔을 3개씩 그룹으로 나누어 실행 (캐시 lock 충돌 방지)
+                    def serviceGroups = backendServices.collate(3)  // 3개씩 그룹화
                     
-                    backendServices.each { service ->
-                        scanSteps["Scan-Backend-${service}"] = {
-                            echo "🛡️ Scanning Backend Service: ${service}"
-                            // 각 스캔에 고유한 캐시 디렉토리 마운트 (lock 충돌 방지)
-                            sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache --env TRIVY_CACHE_DIR=/root/.cache/trivy aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                    serviceGroups.eachWithIndex { group, groupIndex ->
+                        echo "🛡️ Scanning group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
+                        
+                        def scanSteps = [:]
+                        group.each { service ->
+                            scanSteps["Scan-Backend-${service}"] = {
+                                echo "🛡️ Scanning Backend Service: ${service}"
+                                // 각 스캔마다 짧은 지연을 추가하여 lock 충돌 방지
+                                sh "sleep \$((\$RANDOM % 2)) && docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                            }
+                        }
+                        
+                        // 마지막 그룹에 Frontend 추가
+                        if (groupIndex == serviceGroups.size() - 1) {
+                            scanSteps['Scan-Frontend'] = {
+                                echo "🛡️ Scanning Frontend Service"
+                                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
+                            }
+                        }
+                        
+                        // 그룹 내에서 병렬 실행
+                        parallel scanSteps
+                        
+                        // 그룹 간 짧은 대기 시간 (lock 해제 보장)
+                        if (groupIndex < serviceGroups.size() - 1) {
+                            sleep(time: 2, unit: 'SECONDS')
                         }
                     }
-                    
-                    scanSteps['Scan-Frontend'] = {
-                        echo "🛡️ Scanning Frontend Service"
-                        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v trivy_cache:/root/.cache --env TRIVY_CACHE_DIR=/root/.cache/trivy aquasec/trivy:latest image ${TRIVY_OPTIONS} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
-                    }
-                    
-                    // 모든 스캔을 병렬로 실행
-                    parallel scanSteps
                 }
             }
         }
