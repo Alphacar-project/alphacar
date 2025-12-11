@@ -80,22 +80,19 @@ pipeline {
             }
         }
 
-        // ✅ Docker 빌드 병렬화 및 캐시 최적화 (5개씩 그룹화하여 리소스 경쟁 최소화)
+        // ✅ Docker 빌드 병렬화 및 캐시 최적화 (모든 이미지 빌드 보장)
         stage('Build Docker Images') {
             steps {
                 script {
                     def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     
-                    // 5개씩 그룹으로 나누어 병렬 빌드 (안정성과 속도 균형)
-                    def serviceGroups = backendServices.collate(5)
+                    // 모든 빌드를 한 번에 병렬 실행 (9개 이미지: 7개 백엔드 + Frontend + Nginx)
+                    def buildSteps = [:]
                     
-                    serviceGroups.eachWithIndex { group, groupIndex ->
-                        echo "🏗️ Building group ${groupIndex + 1}/${serviceGroups.size()}: ${group.join(', ')}"
-                        
-                        def buildSteps = [:]
-                    
-                        group.each { service ->
-                            buildSteps["Backend-${service}"] = {
+                    // 백엔드 서비스 빌드
+                    backendServices.each { service ->
+                        buildSteps["Backend-${service}"] = {
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                                 sh """
                                     # 캐시 이미지 pull 시도 (실패해도 계속 진행)
                                     docker pull ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:latest || true
@@ -115,34 +112,41 @@ pipeline {
                                 """
                             }
                         }
-                        
-                        // 마지막 그룹에 Frontend와 Nginx 추가
-                        if (groupIndex == serviceGroups.size() - 1) {
-                            buildSteps['Frontend'] = {
-                                sh """
-                                    docker build \\
-                                        --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
-                                        -f frontend/Dockerfile \\
-                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} \\
-                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
-                                        frontend/
-                                """
-                            }
-                            buildSteps['Nginx'] = {
-                                sh """
-                                    docker build \\
-                                        --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
-                                        -f nginx.Dockerfile \\
-                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} \\
-                                        -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
-                                        .
-                                """
-                            }
-                        }
-                        
-                        // 그룹 내에서 병렬 실행
-                        parallel buildSteps
                     }
+                    
+                    // Frontend 빌드
+                    buildSteps['Frontend'] = {
+                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                            sh """
+                                docker pull ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest || true
+                                docker build \\
+                                    --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                    -f frontend/Dockerfile \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:latest \\
+                                    frontend/
+                            """
+                        }
+                    }
+                    
+                    // Nginx 빌드
+                    buildSteps['Nginx'] = {
+                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                            sh """
+                                docker pull ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest || true
+                                docker build \\
+                                    --cache-from ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                    -f nginx.Dockerfile \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} \\
+                                    -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:latest \\
+                                    .
+                            """
+                        }
+                    }
+                    
+                    // 모든 빌드를 병렬로 실행 (9개 이미지 동시 빌드)
+                    echo "🏗️ Building all 9 images in parallel: ${backendServices.join(', ')}, Frontend, Nginx"
+                    parallel buildSteps
                 }
             }
         }
