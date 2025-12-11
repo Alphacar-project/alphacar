@@ -8,7 +8,6 @@ pipeline {
         HARBOR_PROJECT = 'alphacar-project'
         FRONTEND_IMAGE = 'alphacar-frontend'
         NGINX_IMAGE = 'alphacar-nginx'
-        // HAProxy 이미지 변수 제거됨
         GIT_REPO = 'https://github.com/Alphacar-project/alphacar.git'
     }
 
@@ -24,11 +23,10 @@ pipeline {
                 script {
                     def baseBackVer = readFile('backend/version.txt').trim()
                     def baseFrontVer = readFile('frontend/version.txt').trim()
-                    
-                    // 버전에 젠킨스 빌드 번호를 붙여서 자동 증가 (예: 1.0.25)
+
                     env.BACKEND_VERSION = "${baseBackVer}.${currentBuild.number}"
                     env.FRONTEND_VERSION = "${baseFrontVer}.${currentBuild.number}"
-                    
+
                     echo "🚀 New Backend Version: ${env.BACKEND_VERSION}"
                     echo "🚀 New Frontend Version: ${env.FRONTEND_VERSION}"
                 }
@@ -46,19 +44,6 @@ pipeline {
             }
         }
 
-//        stage('SonarQube Quality Gate - Backend') {
-//            steps {
-//                script {
-//                    timeout(time: 5, unit: 'MINUTES') {
-//                        def qgBackend = waitForQualityGate()
-//                        if (qgBackend.status != 'OK') {
-//                            error "Backend Quality Gate failed: ${qgBackend.status}"
-//                        }
-//                    }
-//                }
-//            }
-//        }
-
         stage('SonarQube Analysis - Frontend') {
             steps {
                 script {
@@ -70,33 +55,19 @@ pipeline {
             }
         }
 
-//        stage('SonarQube Quality Gate - Frontend') {
-//            steps {
-//                script {
-//                    timeout(time: 5, unit: 'MINUTES') {
-//                        def qgFrontend = waitForQualityGate()
-//                        if (qgFrontend.status != 'OK') {
-//                            error "Frontend Quality Gate failed: ${qgFrontend.status}"
-//                        }
-//                    }
-//                }
-//            }
-//        }
-
         stage('Build Docker Images') {
             steps {
                 script {
-                    // 1. Backend MSA (7개)
-                    //def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
-                    def backendServices = ['community', 'drive', 'mypage', 'quote', 'search', 'main']
+                    // Backend 서비스 목록 (원하는 서비스 추가/제거)
+                    def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     backendServices.each { service ->
                         sh "docker build --build-arg APP_NAME=${service} -f backend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION} backend/"
                     }
 
-                    // 2. Frontend (1개)
+                    // Frontend
                     sh "docker build -f frontend/Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION} frontend/"
 
-                    // 3. Nginx (HAProxy 빌드 제거됨)
+                    // Nginx
                     sh "docker build -f nginx.Dockerfile -t ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION} ."
                 }
             }
@@ -105,40 +76,36 @@ pipeline {
         stage('Trivy Security Scan') {
             steps {
                 script {
-                    // Trivy 스캔 시 NPM 캐시 파일 경로를 건너뛰도록 --skip-files 옵션 정의
                     def SKIP_CACHE_FILES = "--skip-files 'root/.npm/_cacache/*'"
 
-                    // 1. 백엔드 스캔
-                    //def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
-                    def backendServices = ['community', 'drive', 'mypage', 'quote', 'search', 'main']
+                    def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                     backendServices.each { service ->
                         echo "🛡️ Scanning Backend Service: ${service}"
-                        // SKIP_CACHE_FILES 변수 추가 적용
                         sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
                     }
-                    
-                    // 2. 프론트엔드 스캔
+
                     echo "🛡️ Scanning Frontend Service"
-                    // SKIP_CACHE_FILES 변수 추가 적용
                     sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${SKIP_CACHE_FILES} ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
                 }
             }
         }
 
-
         stage('Push to Harbor') {
             steps {
+                // harbor-cred는 Jenkins에 username/password로 저장된 자격증명 ID
                 withCredentials([usernamePassword(credentialsId: 'harbor-cred', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     script {
-                        sh 'echo $PASS | docker login ${HARBOR_URL} -u $USER --password-stdin'
+                        // 안전하게 멀티라인으로 로그인 (변수 치환 정상)
+                        sh """
+                        echo "\$PASS" | docker login ${HARBOR_URL} -u \$USER --password-stdin
+                        """
 
                         def backendServices = ['aichat', 'community', 'drive', 'mypage', 'quote', 'search', 'main']
                         backendServices.each { service ->
-                             sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
+                            sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/alphacar-${service}:${BACKEND_VERSION}"
                         }
                         sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
                         sh "docker push ${HARBOR_URL}/${HARBOR_PROJECT}/${NGINX_IMAGE}:${BACKEND_VERSION}"
-                        // HAProxy Push 제거됨
 
                         sh "docker logout ${HARBOR_URL}"
                     }
@@ -148,35 +115,34 @@ pipeline {
 
         stage('Deploy to Server') {
             steps {
+                // ssh-server는 Jenkins에 등록된 SSH credential ID (private key)
                 sshagent(credentials: ['ssh-server']) {
                     withCredentials([file(credentialsId: 'ALPHACAR', variable: 'ENV_FILE_PATH'),
                                      usernamePassword(credentialsId: 'harbor-cred', usernameVariable: 'HB_USER', passwordVariable: 'HB_PASS')]) {
                         script {
                             def remoteIP = '192.168.0.160'
                             def remoteUser = 'kevin'
-                            
-                            // 1. Secret File 내용을 읽어옴
+
+                            // 읽어와 로컬에서 치환해서 원격으로 전송
                             def envContent = readFile(ENV_FILE_PATH).trim()
 
                             sh """
-                            ssh -o StrictHostKeyChecking=no ${remoteUser}@${remoteIP} '
-                                # 2. 원격 서버에 .env 파일 생성 (Secret 내용 + 버전 정보 추가)
-                                echo "${envContent}" > ~/alphacar/deploy/.env
-                                echo "BACKEND_VERSION=${BACKEND_VERSION}" >> ~/alphacar/deploy/.env
-                                echo "FRONTEND_VERSION=${FRONTEND_VERSION}" >> ~/alphacar/deploy/.env
-                                
-                                # 2-1. 보안을 위해 .env 파일 권한 제한 (소유자만 읽기/쓰기)
-                                chmod 600 ~/alphacar/deploy/.env
+                            ssh -o StrictHostKeyChecking=no ${remoteUser}@${remoteIP} <<ENDSSH
+                            mkdir -p ~/alphacar/deploy
+                            cat > ~/alphacar/deploy/.env <<EOF_ENV
+${envContent}
+BACKEND_VERSION=${BACKEND_VERSION}
+FRONTEND_VERSION=${FRONTEND_VERSION}
+EOF_ENV
+                            chmod 600 ~/alphacar/deploy/.env
 
-                                # 3. 하버 로그인 및 배포
-                                cd ~/alphacar/deploy && \\
-                                echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin && \\
-                                docker compose pull && \\
-                                docker compose up -d --force-recreate
-                                
-                                # 4. .env 파일은 유지 (docker compose 재시작 시 필요)
-                                #    권한이 600으로 제한되어 있어 보안상 안전함
-                            '
+                            # 하버 로그인 (원격에서 token/username으로 로그인)
+                            echo "${HB_PASS}" | docker login ${HARBOR_URL} -u ${HB_USER} --password-stdin
+
+                            cd ~/alphacar/deploy
+                            docker compose pull
+                            docker compose up -d --force-recreate
+                            ENDSSH
                             """
                         }
                     }
@@ -194,3 +160,4 @@ pipeline {
         }
     }
 }
+
