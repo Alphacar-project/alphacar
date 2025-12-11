@@ -33,27 +33,24 @@ pipeline {
             }
         }
 
-        // ✅ SonarQube 분석 병렬화
-        stage('SonarQube Analysis') {
-            parallel {
-                stage('Backend') {
-                    steps {
-                        script {
-                            def scannerHome = tool 'sonar-scanner'
-                            withSonarQubeEnv("${SONARQUBE}") {
-                                sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-backend -Dsonar.projectName=alphacar-backend -Dsonar.sources=backend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
-                            }
-                        }
+        // SonarQube 분석 (순차 실행 - 병렬 시 워크스페이스 경로 충돌 발생)
+        stage('SonarQube Analysis - Backend') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-backend -Dsonar.projectName=alphacar-backend -Dsonar.sources=backend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
                     }
                 }
-                stage('Frontend') {
-                    steps {
-                        script {
-                            def scannerHome = tool 'sonar-scanner'
-                            withSonarQubeEnv("${SONARQUBE}") {
-                                sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-frontend -Dsonar.projectName=alphacar-frontend -Dsonar.sources=frontend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
-                            }
-                        }
+            }
+        }
+
+        stage('SonarQube Analysis - Frontend') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv("${SONARQUBE}") {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=alphacar-frontend -Dsonar.projectName=alphacar-frontend -Dsonar.sources=frontend -Dsonar.host.url=${SONAR_URL} -Dsonar.sourceEncoding=UTF-8"
                     }
                 }
             }
