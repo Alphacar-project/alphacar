@@ -12,7 +12,7 @@ RUN apk add --no-cache libc6-compat
 # 1-2. 패키지 파일 복사
 # (빌드 컨텍스트가 backend/ 이므로 해당 경로 기준)
 COPY package.json package-lock.json ./
-COPY ${APP_NAME}/package.json ${APP_NAME}/
+COPY ${APP_NAME}/package.json ${APP_NAME}/package-lock.json ${APP_NAME}/
 
 # 1-3. 의존성 설치 (CI 모드: 빠르고 정확함)
 # 이때는 빌드를 위해 devDependencies(NestCLI 등)가 모두 설치됩니다.
@@ -23,6 +23,8 @@ RUN npm install --legacy-peer-deps
 COPY . .
 # 스키마 복사 (필요한 경우)
 RUN [ -d "schemas" ] && cp -r schemas ${APP_NAME}/src/ || true
+# 각 서비스 디렉토리에서도 의존성 설치 (각 서비스의 package.json에 있는 의존성)
+RUN cd ${APP_NAME} && npm install --legacy-peer-deps
 # 빌드 실행 -> dist 폴더 생성
 RUN cd ${APP_NAME} && nest build
 
